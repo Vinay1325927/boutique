@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
+import pywhatkit as kit
 import urllib.parse
 
 # =====================================================
@@ -543,16 +544,17 @@ def add_sale():
             if not customer or buying_price == 0 or selling_price == 0:
                 st.error("⚠️ Please fill in all required fields (*)")
             else:
+                payment_received = 1 if pending_amount == 0 else 0
                 cursor.execute("""
                 INSERT INTO sales 
                 (customer_name, customer_phone, sale_date, vendor, product_category, 
                  product_description, buying_price, selling_price, amount_paid, 
                  pending_amount, payment_received, delay_status, payment_method, notes)
-                VALUES (%s, %s, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (customer, customer_phone, str(sale_date), vendor, product_category,
                  product_description, buying_price, selling_price, amount_paid, 
-                 pending_amount, 1 if pending_amount == 0 else 0, 0, payment_method, notes))
+                 pending_amount, payment_received, 0, payment_method, notes))
                 
                 conn.commit()
                 st.success("✅ Sale Added Successfully!")
@@ -790,13 +792,13 @@ def update_transaction():
                     UPDATE sales
                     SET customer_name = %s,
                         customer_phone = %s,
-                        product_category = ?,
-                        amount_paid = ?,
-                        pending_amount = ?,
-                        delay_status = ?,
-                        payment_method = ?,
-                        notes = ?,
-                        payment_received = ?
+                        product_category = %s,
+                        amount_paid = %s,
+                        pending_amount = %s,
+                        delay_status = %s,
+                        payment_method = %s,
+                        notes = %s,
+                        payment_received = %s
                     WHERE id = %s
                     """,
                     (new_customer, new_phone, new_category, new_amount_paid, new_pending, 
