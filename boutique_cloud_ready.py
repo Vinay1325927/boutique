@@ -11,7 +11,6 @@ from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
-import pywhatkit as kit
 import urllib.parse
 
 # =====================================================
