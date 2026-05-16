@@ -22,7 +22,7 @@ st.set_page_config(
 )
 
 # =====================================================
-# CSS
+# CSS — DARK NAVY BLUE THEME
 # =====================================================
 
 st.markdown("""
@@ -30,46 +30,46 @@ st.markdown("""
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Jost:wght@300;400;500;600&display=swap');
 
 :root {
-    --ink:          #1A1714;
-    --ink-2:        #242018;
-    --ink-3:        #2E2A24;
-    --ink-4:        #3A342C;
-    --ink-5:        #47403A;
-    --gold:         #2A5FA5;
-    --gold-soft:    #4A80C8;
-    --gold-pale:    #A8C4E8;
-    --gold-glow:    rgba(42,95,165,0.12);
-    --cream:        #F5F0E8;
-    --cream-dim:    #E8E0D0;
-    --muted:        #8C8070;
-    --dim:          #5C5248;
-    --emerald:      #3D7A5C;
-    --rose:         #B05050;
-    --sky:          #4A7FA0;
+    --navy-1:       #070C18;
+    --navy-2:       #0B1221;
+    --navy-3:       #0F1A2E;
+    --navy-4:       #152238;
+    --navy-5:       #1C2D47;
+    --blue:         #2E6FD8;
+    --blue-soft:    #4D8AE8;
+    --blue-pale:    #A8C4F0;
+    --blue-glow:    rgba(46,111,216,0.15);
+    --cream:        #E8EEF8;
+    --cream-dim:    #C8D4E8;
+    --muted:        #6A84A8;
+    --dim:          #3D5478;
+    --emerald:      #3D9A6C;
+    --rose:         #C05060;
+    --sky:          #4A9AC8;
     --r:            8px;
     --r-lg:         14px;
     --r-xl:         20px;
-    --border:       rgba(42,95,165,0.14);
-    --border-hover: rgba(42,95,165,0.32);
-    --shadow:       0 2px 24px rgba(0,0,0,0.4);
-    --shadow-lg:    0 8px 48px rgba(0,0,0,0.55);
+    --border:       rgba(46,111,216,0.18);
+    --border-hover: rgba(46,111,216,0.42);
+    --shadow:       0 2px 24px rgba(0,0,0,0.5);
+    --shadow-lg:    0 8px 48px rgba(0,0,0,0.65);
 }
 
 html, body, [class*="css"] {
     font-family: 'Jost', sans-serif !important;
-    background: var(--ink) !important;
+    background: var(--navy-1) !important;
     color: var(--cream) !important;
 }
 .stApp {
-    background: var(--ink) !important;
+    background: var(--navy-1) !important;
     background-image:
-        radial-gradient(ellipse 900px 600px at 0% 0%, rgba(42,95,165,0.06) 0%, transparent 70%),
-        radial-gradient(ellipse 700px 500px at 100% 100%, rgba(42,95,165,0.04) 0%, transparent 70%);
+        radial-gradient(ellipse 900px 600px at 0% 0%, rgba(46,111,216,0.08) 0%, transparent 70%),
+        radial-gradient(ellipse 700px 500px at 100% 100%, rgba(46,111,216,0.05) 0%, transparent 70%);
     background-attachment: fixed;
 }
 ::-webkit-scrollbar { width: 3px; height: 3px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(42,95,165,0.35); border-radius: 99px; }
+::-webkit-scrollbar-thumb { background: rgba(46,111,216,0.4); border-radius: 99px; }
 
 h1, h2, h3 {
     font-family: 'Playfair Display', serif !important;
@@ -103,30 +103,63 @@ h4, h5, h6 {
     margin-bottom: 2.4rem;
     font-weight: 400;
 }
-.rule { height:1px; background:linear-gradient(90deg, var(--gold) 0%, rgba(42,95,165,0.2) 60%, transparent 100%); margin:2rem 0; border:none; }
-.rule-sm { height:1px; background:linear-gradient(90deg, rgba(42,95,165,0.35), transparent); margin:1.2rem 0; border:none; }
+.rule { height:1px; background:linear-gradient(90deg, var(--blue) 0%, rgba(46,111,216,0.2) 60%, transparent 100%); margin:2rem 0; border:none; }
+.rule-sm { height:1px; background:linear-gradient(90deg, rgba(46,111,216,0.4), transparent); margin:1.2rem 0; border:none; }
 
 /* ━━━ SIDEBAR ━━━ */
-[data-testid="stSidebar"] { background: var(--ink-2) !important; border-right: 1px solid var(--border) !important; }
+[data-testid="stSidebar"] {
+    background: var(--navy-2) !important;
+    border-right: 1px solid var(--border) !important;
+}
 [data-testid="stSidebar"] * { color: var(--cream) !important; }
 .sb-brand { padding: 2rem 1.5rem 0.5rem; text-align: center; }
-.sb-logo { font-family: 'Playfair Display', serif; font-size: 1.75rem; font-weight: 500; color: var(--gold-soft); letter-spacing: 0.12em; line-height: 1; }
-.sb-mark { font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.28em; color: var(--dim); margin-top: 0.3rem; }
+.sb-logo {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.75rem;
+    font-weight: 500;
+    color: var(--blue-soft);
+    letter-spacing: 0.12em;
+    line-height: 1;
+}
+.sb-mark {
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 0.28em;
+    color: var(--dim);
+    margin-top: 0.3rem;
+}
 [data-testid="stSidebar"] .stRadio > div { gap: 2px !important; }
 [data-testid="stSidebar"] .stRadio > div > label {
-    background: transparent !important; border: none !important; border-radius: var(--r) !important;
-    color: var(--muted) !important; font-size: 0.82rem !important; font-weight: 400 !important;
-    letter-spacing: 0.03em !important; padding: 0.55rem 1rem 0.55rem 0.75rem !important;
-    transition: all 0.2s ease !important; cursor: pointer; display: flex; align-items: center;
+    background: transparent !important;
+    border: none !important;
+    border-radius: var(--r) !important;
+    color: var(--muted) !important;
+    font-size: 0.82rem !important;
+    font-weight: 400 !important;
+    letter-spacing: 0.03em !important;
+    padding: 0.55rem 1rem 0.55rem 0.75rem !important;
+    transition: all 0.2s ease !important;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
 }
-[data-testid="stSidebar"] .stRadio > div > label:hover { background: rgba(42,95,165,0.1) !important; color: var(--cream) !important; }
+[data-testid="stSidebar"] .stRadio > div > label:hover {
+    background: rgba(46,111,216,0.12) !important;
+    color: var(--cream) !important;
+}
 [data-testid="stSidebar"] .stRadio > div > label > div:first-child { display: none !important; }
-.sb-user { font-size: 0.75rem; color: var(--dim); text-align: center; padding: 0.6rem 0 1.5rem; letter-spacing: 0.06em; }
+.sb-user {
+    font-size: 0.75rem;
+    color: var(--dim);
+    text-align: center;
+    padding: 0.6rem 0 1.5rem;
+    letter-spacing: 0.06em;
+}
 .sb-sep { height: 1px; background: var(--border); margin: 0.8rem 1rem; }
 
 /* ━━━ PUBLIC BANNER ━━━ */
 .pub-banner {
-    background: linear-gradient(135deg, var(--ink-2) 0%, var(--ink-3) 100%);
+    background: linear-gradient(135deg, var(--navy-2) 0%, var(--navy-3) 100%);
     border: 1px solid var(--border);
     border-radius: var(--r-xl);
     padding: 2rem 2.5rem 1.5rem;
@@ -139,7 +172,7 @@ h4, h5, h6 {
     position: absolute;
     top: 0; left: 0; right: 0;
     height: 2px;
-    background: linear-gradient(90deg, transparent, var(--gold), transparent);
+    background: linear-gradient(90deg, transparent, var(--blue), transparent);
 }
 .pub-banner-title {
     font-family: 'Playfair Display', serif;
@@ -167,14 +200,14 @@ h4, h5, h6 {
     font-size: 0.62rem;
     text-transform: uppercase;
     letter-spacing: 0.26em;
-    color: var(--ink-5);
+    color: var(--navy-5);
     text-align: center;
     margin-bottom: 0.8rem;
 }
 
 /* ━━━ METRICS ━━━ */
 [data-testid="stMetric"] {
-    background: var(--ink-3) !important;
+    background: var(--navy-3) !important;
     border: 1px solid var(--border) !important;
     border-radius: var(--r-lg) !important;
     padding: 1.25rem 1.4rem !important;
@@ -187,55 +220,89 @@ h4, h5, h6 {
     position: absolute;
     bottom: 0; left: 0; right: 0;
     height: 2px;
-    background: linear-gradient(90deg, var(--gold), transparent);
-    opacity: 0.5;
+    background: linear-gradient(90deg, var(--blue), transparent);
+    opacity: 0.6;
 }
-[data-testid="stMetric"]:hover { border-color: var(--border-hover) !important; transform: translateY(-2px); }
+[data-testid="stMetric"]:hover {
+    border-color: var(--border-hover) !important;
+    transform: translateY(-2px);
+}
 [data-testid="stMetricLabel"] > div {
-    color: var(--dim) !important; font-size: 0.68rem !important; text-transform: uppercase !important;
-    letter-spacing: 0.16em !important; font-weight: 600 !important; font-family: 'Jost', sans-serif !important;
+    color: var(--muted) !important;
+    font-size: 0.68rem !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.16em !important;
+    font-weight: 600 !important;
+    font-family: 'Jost', sans-serif !important;
 }
 [data-testid="stMetricValue"] {
-    color: var(--cream) !important; font-family: 'Playfair Display', serif !important;
-    font-size: 1.7rem !important; font-weight: 500 !important; letter-spacing: 0 !important; line-height: 1.2 !important;
+    color: var(--cream) !important;
+    font-family: 'Playfair Display', serif !important;
+    font-size: 1.7rem !important;
+    font-weight: 500 !important;
+    letter-spacing: 0 !important;
+    line-height: 1.2 !important;
 }
 
 /* ━━━ BUTTONS ━━━ */
 .stButton > button {
-    background: transparent !important; color: var(--gold-soft) !important;
-    border: 1px solid var(--border-hover) !important; border-radius: var(--r) !important;
-    font-family: 'Jost', sans-serif !important; font-weight: 500 !important;
-    font-size: 0.8rem !important; letter-spacing: 0.1em !important;
-    text-transform: uppercase !important; padding: 0.6rem 1.4rem !important;
-    transition: all 0.2s ease !important; width: 100% !important;
+    background: transparent !important;
+    color: var(--blue-soft) !important;
+    border: 1px solid var(--border-hover) !important;
+    border-radius: var(--r) !important;
+    font-family: 'Jost', sans-serif !important;
+    font-weight: 500 !important;
+    font-size: 0.8rem !important;
+    letter-spacing: 0.1em !important;
+    text-transform: uppercase !important;
+    padding: 0.6rem 1.4rem !important;
+    transition: all 0.2s ease !important;
+    width: 100% !important;
 }
 .stButton > button:hover {
-    background: rgba(42,95,165,0.1) !important; border-color: var(--gold) !important;
-    color: var(--gold-pale) !important; transform: translateY(-1px) !important;
+    background: rgba(46,111,216,0.14) !important;
+    border-color: var(--blue) !important;
+    color: var(--blue-pale) !important;
+    transform: translateY(-1px) !important;
 }
 .stButton > button:active { transform: scale(0.98) !important; }
 
 .stDownloadButton > button {
-    background: transparent !important; color: var(--muted) !important;
-    border: 1px solid var(--border) !important; border-radius: var(--r) !important;
-    font-size: 0.78rem !important; font-weight: 400 !important;
-    letter-spacing: 0.08em !important; text-transform: uppercase !important;
-    transition: all 0.2s ease !important; width: 100% !important;
+    background: transparent !important;
+    color: var(--muted) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: var(--r) !important;
+    font-size: 0.78rem !important;
+    font-weight: 400 !important;
+    letter-spacing: 0.08em !important;
+    text-transform: uppercase !important;
+    transition: all 0.2s ease !important;
+    width: 100% !important;
 }
-.stDownloadButton > button:hover { border-color: var(--border-hover) !important; color: var(--cream) !important; }
+.stDownloadButton > button:hover {
+    border-color: var(--border-hover) !important;
+    color: var(--cream) !important;
+}
 
 /* ━━━ FORM SUBMIT ━━━ */
 .stForm button[type="submit"] {
-    background: var(--gold) !important; color: #F0F4FA !important;
-    border: none !important; border-radius: var(--r) !important;
-    font-family: 'Jost', sans-serif !important; font-weight: 600 !important;
-    font-size: 0.82rem !important; letter-spacing: 0.14em !important;
-    text-transform: uppercase !important; padding: 0.85rem 2.5rem !important;
-    width: 100% !important; transition: all 0.25s ease !important;
+    background: var(--blue) !important;
+    color: #E8EEF8 !important;
+    border: none !important;
+    border-radius: var(--r) !important;
+    font-family: 'Jost', sans-serif !important;
+    font-weight: 600 !important;
+    font-size: 0.82rem !important;
+    letter-spacing: 0.14em !important;
+    text-transform: uppercase !important;
+    padding: 0.85rem 2.5rem !important;
+    width: 100% !important;
+    transition: all 0.25s ease !important;
 }
 .stForm button[type="submit"]:hover {
-    background: var(--gold-soft) !important; transform: translateY(-2px) !important;
-    box-shadow: 0 6px 24px rgba(42,95,165,0.35) !important;
+    background: var(--blue-soft) !important;
+    transform: translateY(-2px) !important;
+    box-shadow: 0 6px 24px rgba(46,111,216,0.4) !important;
 }
 
 /* ━━━ INPUTS ━━━ */
@@ -243,24 +310,31 @@ h4, h5, h6 {
 .stNumberInput > div > div > input,
 .stTextArea > div > div > textarea,
 .stDateInput > div > div > input {
-    background: var(--ink-3) !important; border: 1px solid var(--border) !important;
-    border-radius: var(--r) !important; color: var(--cream) !important;
-    font-family: 'Jost', sans-serif !important; font-size: 0.88rem !important;
-    font-weight: 300 !important; padding: 0.6rem 0.9rem !important;
+    background: var(--navy-3) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: var(--r) !important;
+    color: var(--cream) !important;
+    font-family: 'Jost', sans-serif !important;
+    font-size: 0.88rem !important;
+    font-weight: 300 !important;
+    padding: 0.6rem 0.9rem !important;
     transition: border-color 0.2s ease !important;
 }
 .stTextInput > div > div > input:focus,
 .stNumberInput > div > div > input:focus,
 .stTextArea > div > div > textarea:focus,
 .stDateInput > div > div > input:focus {
-    border-color: var(--gold) !important; box-shadow: 0 0 0 3px rgba(42,95,165,0.1) !important;
+    border-color: var(--blue) !important;
+    box-shadow: 0 0 0 3px rgba(46,111,216,0.15) !important;
 }
 .stTextInput > div > div > input::placeholder,
-.stTextArea > div > div > textarea::placeholder { color: var(--ink-5) !important; }
+.stTextArea > div > div > textarea::placeholder { color: var(--navy-5) !important; }
 
 .stSelectbox > div > div {
-    background: var(--ink-3) !important; border: 1px solid var(--border) !important;
-    border-radius: var(--r) !important; color: var(--cream) !important;
+    background: var(--navy-3) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: var(--r) !important;
+    color: var(--cream) !important;
     transition: border-color 0.2s ease !important;
 }
 .stSelectbox > div > div:hover { border-color: var(--border-hover) !important; }
@@ -268,86 +342,165 @@ h4, h5, h6 {
 /* ━━━ LABELS ━━━ */
 .stTextInput label, .stNumberInput label, .stSelectbox label,
 .stTextArea label, .stDateInput label, .stRadio label, .stCheckbox label {
-    color: var(--dim) !important; font-size: 0.68rem !important; font-weight: 600 !important;
-    text-transform: uppercase !important; letter-spacing: 0.14em !important; font-family: 'Jost', sans-serif !important;
+    color: var(--muted) !important;
+    font-size: 0.68rem !important;
+    font-weight: 600 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.14em !important;
+    font-family: 'Jost', sans-serif !important;
 }
 
 /* ━━━ DATAFRAME ━━━ */
-.stDataFrame { border-radius: var(--r-lg) !important; border: 1px solid var(--border) !important; overflow: hidden !important; }
+.stDataFrame {
+    border-radius: var(--r-lg) !important;
+    border: 1px solid var(--border) !important;
+    overflow: hidden !important;
+}
 [data-testid="stDataFrame"] th {
-    background: var(--ink-3) !important; color: var(--dim) !important; font-size: 0.68rem !important;
-    text-transform: uppercase !important; letter-spacing: 0.12em !important; font-weight: 600 !important;
-    border-bottom: 1px solid var(--border) !important; padding: 0.75rem 1rem !important;
+    background: var(--navy-3) !important;
+    color: var(--muted) !important;
+    font-size: 0.68rem !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.12em !important;
+    font-weight: 600 !important;
+    border-bottom: 1px solid var(--border) !important;
+    padding: 0.75rem 1rem !important;
 }
 [data-testid="stDataFrame"] td {
-    background: var(--ink-2) !important; color: var(--cream) !important; font-size: 0.85rem !important;
-    font-weight: 300 !important; border-bottom: 1px solid rgba(42,95,165,0.06) !important; padding: 0.7rem 1rem !important;
+    background: var(--navy-2) !important;
+    color: var(--cream) !important;
+    font-size: 0.85rem !important;
+    font-weight: 300 !important;
+    border-bottom: 1px solid rgba(46,111,216,0.08) !important;
+    padding: 0.7rem 1rem !important;
 }
-[data-testid="stDataFrame"] tr:hover td { background: var(--ink-3) !important; }
+[data-testid="stDataFrame"] tr:hover td { background: var(--navy-3) !important; }
 
 /* ━━━ TABS ━━━ */
 .stTabs [data-baseweb="tab-list"] {
-    background: transparent !important; border-bottom: 1px solid var(--border) !important;
-    border-radius: 0 !important; padding: 0 !important; gap: 0 !important;
+    background: transparent !important;
+    border-bottom: 1px solid var(--border) !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+    gap: 0 !important;
 }
 .stTabs [data-baseweb="tab"] {
-    background: transparent !important; border-radius: 0 !important; color: var(--dim) !important;
-    font-family: 'Jost', sans-serif !important; font-weight: 400 !important;
-    font-size: 0.78rem !important; letter-spacing: 0.08em !important;
-    text-transform: uppercase !important; padding: 0.75rem 1.25rem !important;
-    border-bottom: 2px solid transparent !important; transition: all 0.2s !important; margin-bottom: -1px !important;
+    background: transparent !important;
+    border-radius: 0 !important;
+    color: var(--dim) !important;
+    font-family: 'Jost', sans-serif !important;
+    font-weight: 400 !important;
+    font-size: 0.78rem !important;
+    letter-spacing: 0.08em !important;
+    text-transform: uppercase !important;
+    padding: 0.75rem 1.25rem !important;
+    border-bottom: 2px solid transparent !important;
+    transition: all 0.2s !important;
+    margin-bottom: -1px !important;
 }
-.stTabs [aria-selected="true"] { color: var(--cream) !important; border-bottom-color: var(--gold) !important; }
+.stTabs [aria-selected="true"] {
+    color: var(--cream) !important;
+    border-bottom-color: var(--blue) !important;
+}
 .stTabs [data-baseweb="tab"]:hover { color: var(--cream) !important; }
 
 /* ━━━ ALERTS ━━━ */
-.stSuccess { background: rgba(61,122,92,0.12) !important; border: 1px solid rgba(61,122,92,0.3) !important; border-radius: var(--r) !important; color: #7ABFA0 !important; }
-.stInfo { background: rgba(74,127,160,0.1) !important; border: 1px solid rgba(74,127,160,0.25) !important; border-radius: var(--r) !important; }
-.stWarning { background: rgba(42,95,165,0.1) !important; border: 1px solid rgba(42,95,165,0.28) !important; border-radius: var(--r) !important; }
-.stError { background: rgba(176,80,80,0.1) !important; border: 1px solid rgba(176,80,80,0.28) !important; border-radius: var(--r) !important; }
+.stSuccess {
+    background: rgba(61,154,108,0.12) !important;
+    border: 1px solid rgba(61,154,108,0.3) !important;
+    border-radius: var(--r) !important;
+    color: #7ADFA0 !important;
+}
+.stInfo {
+    background: rgba(46,111,216,0.1) !important;
+    border: 1px solid rgba(46,111,216,0.28) !important;
+    border-radius: var(--r) !important;
+}
+.stWarning {
+    background: rgba(200,160,50,0.1) !important;
+    border: 1px solid rgba(200,160,50,0.28) !important;
+    border-radius: var(--r) !important;
+}
+.stError {
+    background: rgba(192,80,96,0.1) !important;
+    border: 1px solid rgba(192,80,96,0.28) !important;
+    border-radius: var(--r) !important;
+}
 
 /* ━━━ RADIO (inline) ━━━ */
 .stRadio > div { gap: 0.5rem !important; flex-direction: row !important; }
 .stRadio > div > label {
-    background: var(--ink-3) !important; border: 1px solid var(--border) !important;
-    border-radius: var(--r) !important; padding: 0.5rem 1.1rem !important;
-    color: var(--muted) !important; font-size: 0.8rem !important; font-weight: 400 !important;
-    letter-spacing: 0.04em !important; transition: all 0.2s !important; cursor: pointer;
+    background: var(--navy-3) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: var(--r) !important;
+    padding: 0.5rem 1.1rem !important;
+    color: var(--muted) !important;
+    font-size: 0.8rem !important;
+    font-weight: 400 !important;
+    letter-spacing: 0.04em !important;
+    transition: all 0.2s !important;
+    cursor: pointer;
 }
-.stRadio > div > label:hover { border-color: var(--border-hover) !important; color: var(--cream) !important; }
+.stRadio > div > label:hover {
+    border-color: var(--border-hover) !important;
+    color: var(--cream) !important;
+}
 
 /* ━━━ SECTION HEADERS ━━━ */
 .sec-head {
-    font-family: 'Playfair Display', serif; font-size: 1.05rem; font-weight: 500;
-    font-style: italic; color: var(--cream); margin: 1.8rem 0 1rem;
-    padding-bottom: 0.6rem; border-bottom: 1px solid var(--border); letter-spacing: 0.01em;
+    font-family: 'Playfair Display', serif;
+    font-size: 1.05rem;
+    font-weight: 500;
+    font-style: italic;
+    color: var(--cream);
+    margin: 1.8rem 0 1rem;
+    padding-bottom: 0.6rem;
+    border-bottom: 1px solid var(--border);
+    letter-spacing: 0.01em;
 }
 
 /* ━━━ BADGES ━━━ */
-.badge { display: inline-block; font-size: 0.68rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; padding: 0.22rem 0.65rem; border-radius: 4px; }
-.badge-gold  { background: rgba(42,95,165,0.15); color: var(--gold-soft); }
-.badge-green { background: rgba(61,122,92,0.15);  color: #7ABFA0; }
-.badge-red   { background: rgba(176,80,80,0.15);  color: #D88080; }
-.badge-muted { background: var(--ink-4); color: var(--muted); }
+.badge {
+    display: inline-block;
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 0.22rem 0.65rem;
+    border-radius: 4px;
+}
+.badge-gold  { background: rgba(46,111,216,0.18); color: var(--blue-soft); }
+.badge-green { background: rgba(61,154,108,0.15); color: #7ADFA0; }
+.badge-red   { background: rgba(192,80,96,0.15);  color: #E08090; }
+.badge-muted { background: var(--navy-5);          color: var(--muted); }
 
 /* ━━━ EMPTY STATE ━━━ */
 .empty { text-align: center; padding: 4rem 2rem; color: var(--dim); }
-.empty-glyph { font-size: 2rem; margin-bottom: 1rem; color: var(--ink-5); }
+.empty-glyph { font-size: 2rem; margin-bottom: 1rem; color: var(--navy-5); }
 
 /* Number input spinners */
-button[data-testid="stNumberInputStepDown"], button[data-testid="stNumberInputStepUp"] {
-    background: var(--ink-4) !important; border-color: var(--border) !important; color: var(--muted) !important;
+button[data-testid="stNumberInputStepDown"],
+button[data-testid="stNumberInputStepUp"] {
+    background: var(--navy-5) !important;
+    border-color: var(--border) !important;
+    color: var(--muted) !important;
 }
 
 /* Expanders */
 .streamlit-expanderHeader {
-    background: var(--ink-3) !important; border: 1px solid var(--border) !important;
-    border-radius: var(--r) !important; color: var(--muted) !important;
-    font-family: 'Jost', sans-serif !important; font-size: 0.82rem !important;
+    background: var(--navy-3) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: var(--r) !important;
+    color: var(--muted) !important;
+    font-family: 'Jost', sans-serif !important;
+    font-size: 0.82rem !important;
 }
 .streamlit-expanderContent {
-    background: var(--ink-2) !important; border: 1px solid var(--border) !important;
-    border-top: none !important; border-radius: 0 0 var(--r) var(--r) !important; padding: 1rem !important;
+    background: var(--navy-2) !important;
+    border: 1px solid var(--border) !important;
+    border-top: none !important;
+    border-radius: 0 0 var(--r) var(--r) !important;
+    padding: 1rem !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -359,14 +512,14 @@ button[data-testid="stNumberInputStepDown"], button[data-testid="stNumberInputSt
 PLOT_LAYOUT = dict(
     paper_bgcolor="rgba(0,0,0,0)",
     plot_bgcolor="rgba(0,0,0,0)",
-    font=dict(family="Jost", color="#5C5248", size=11),
-    title=dict(font=dict(family="Playfair Display", size=17, color="#E8E0D0"), pad=dict(b=12), x=0),
-    xaxis=dict(gridcolor="rgba(42,95,165,0.06)", linecolor="rgba(42,95,165,0.12)", tickfont=dict(size=10, color="#5C5248"), showgrid=True, zeroline=False),
-    yaxis=dict(gridcolor="rgba(42,95,165,0.06)", linecolor="rgba(42,95,165,0.12)", tickfont=dict(size=10, color="#5C5248"), showgrid=True, zeroline=False),
-    legend=dict(bgcolor="rgba(26,23,20,0.85)", bordercolor="rgba(42,95,165,0.18)", borderwidth=1, font=dict(color="#8C8070", size=10)),
+    font=dict(family="Jost", color="#3D5478", size=11),
+    title=dict(font=dict(family="Playfair Display", size=17, color="#C8D4E8"), pad=dict(b=12), x=0),
+    xaxis=dict(gridcolor="rgba(46,111,216,0.08)", linecolor="rgba(46,111,216,0.15)", tickfont=dict(size=10, color="#3D5478"), showgrid=True, zeroline=False),
+    yaxis=dict(gridcolor="rgba(46,111,216,0.08)", linecolor="rgba(46,111,216,0.15)", tickfont=dict(size=10, color="#3D5478"), showgrid=True, zeroline=False),
+    legend=dict(bgcolor="rgba(7,12,24,0.88)", bordercolor="rgba(46,111,216,0.2)", borderwidth=1, font=dict(color="#6A84A8", size=10)),
     margin=dict(l=12, r=12, t=44, b=12),
-    colorway=["#2A5FA5","#4A80C8","#7ABFA0","#8BACC8","#C87878","#1A3D70","#3D7A5C","#4A7FA0"],
-    hoverlabel=dict(bgcolor="rgba(26,23,20,0.96)", bordercolor="rgba(42,95,165,0.25)", font=dict(color="#F5F0E8", size=11, family="Jost"), align="left"),
+    colorway=["#2E6FD8","#4D8AE8","#7ADFA0","#8BACD8","#E08090","#1A3D80","#3D9A6C","#4A9AC8"],
+    hoverlabel=dict(bgcolor="rgba(7,12,24,0.96)", bordercolor="rgba(46,111,216,0.3)", font=dict(color="#E8EEF8", size=11, family="Jost"), align="left"),
     bargap=0.35,
 )
 
@@ -479,16 +632,15 @@ def to_excel(df: pd.DataFrame) -> BytesIO:
             ml = max(ex.iloc[:, i-1].astype(str).map(len).max(), len(col)) + 4
             ws.column_dimensions[ws.cell(1, i).column_letter].width = min(ml, 45)
         from openpyxl.styles import Font, PatternFill, Alignment
-        gold_fill = PatternFill("solid", fgColor="2A5FA5")
+        blue_fill = PatternFill("solid", fgColor="2E6FD8")
         for cell in ws[1]:
-            cell.font = Font(bold=True, color="F0F4FA")
-            cell.fill = gold_fill
+            cell.font = Font(bold=True, color="E8EEF8")
+            cell.fill = blue_fill
             cell.alignment = Alignment(horizontal="center")
     out.seek(0)
     return out
 
 def get_existing_customers():
-    """Returns names only — no phone numbers exposed publicly."""
     pipeline = [
         {"$match": {"customer_name": {"$ne": None, "$ne": ""}}},
         {"$group": {
@@ -501,7 +653,6 @@ def get_existing_customers():
     return list(get_col().aggregate(pipeline))
 
 def get_existing_customers_with_phone():
-    """Admin only — includes phone numbers."""
     pipeline = [
         {"$match": {"customer_name": {"$ne": None, "$ne": ""}}},
         {"$group": {
@@ -535,14 +686,10 @@ def is_admin():
     return st.session_state.get("logged_in", False)
 
 # =====================================================
-# PUBLIC ADD SALE PAGE (default landing)
+# PUBLIC ADD SALE PAGE
 # =====================================================
 
 def page_add_sale(public=False):
-    """
-    public=True  → shown to anyone, no phone numbers on existing customer list
-    public=False → shown to logged-in admin (full access)
-    """
     if public:
         st.markdown("""
         <div class='pub-banner'>
@@ -560,13 +707,11 @@ def page_add_sale(public=False):
 
     if ctype == "Existing Customer":
         if public:
-            # Names only, no phone
             existing = get_existing_customers()
         else:
             existing = get_existing_customers_with_phone()
 
         if existing:
-            # Build options: name only (public) or name + phone (admin)
             if public:
                 opts = [r["_id"] for r in existing]
                 sel  = st.selectbox("Select Customer", opts)
@@ -575,7 +720,6 @@ def page_add_sale(public=False):
                 ca, cb = st.columns(2)
                 ca.info(f"**Name:** {cname}")
                 cb.info(f"**Visits:** {rec.get('visits', '—')}")
-                # Phone stays blank — will be left empty in DB for this entry
                 cphone = ""
             else:
                 opts  = [f"{r['_id']}  —  {r.get('phone','') or 'No phone'}" for r in existing]
@@ -598,13 +742,12 @@ def page_add_sale(public=False):
             cname  = st.text_input("Customer Name *", value=cname,
                                    disabled=(ctype == "Existing Customer"))
         with c2:
-            # If public and existing customer, hide phone field
             if public and ctype == "Existing Customer":
                 cphone = ""
                 st.text_input("Phone", value="", placeholder="(Admin access required)", disabled=True)
             else:
                 cphone = st.text_input("Phone", value=cphone, placeholder="+91 XXXXXXXXXX",
-                                       disabled=(ctype == "Existing Customer" and not public))
+                                       disabled=(ctype == "Existing Customer"))
         with c3:
             sdate = st.date_input("Sale Date", date.today())
 
@@ -673,7 +816,7 @@ def page_add_sale(public=False):
                 st.rerun()
 
 # =====================================================
-# ADMIN LOGIN (shown at bottom of public page)
+# ADMIN LOGIN
 # =====================================================
 
 def render_admin_login_strip():
@@ -776,24 +919,24 @@ def page_dashboard():
     with cl:
         monthly = df.groupby("month").agg(revenue=("selling_price","sum"), profit=("profit","sum"), sales=("id","count")).reset_index()
         fig = go.Figure()
-        fig.add_trace(go.Bar(x=monthly["month"], y=monthly["revenue"], name="Revenue", marker_color="rgba(42,95,165,0.4)", marker_line_color="#2A5FA5", marker_line_width=1))
-        fig.add_trace(go.Scatter(x=monthly["month"], y=monthly["profit"], name="Profit", mode="lines+markers", line=dict(color="#7ABFA0", width=2), marker=dict(size=5, color="#7ABFA0")))
+        fig.add_trace(go.Bar(x=monthly["month"], y=monthly["revenue"], name="Revenue", marker_color="rgba(46,111,216,0.4)", marker_line_color="#2E6FD8", marker_line_width=1))
+        fig.add_trace(go.Scatter(x=monthly["month"], y=monthly["profit"], name="Profit", mode="lines+markers", line=dict(color="#7ADFA0", width=2), marker=dict(size=5, color="#7ADFA0")))
         styled_fig(fig, 300).update_layout(title="Monthly Revenue & Profit", barmode="overlay", legend=dict(orientation="h", y=1.18, x=0))
         st.plotly_chart(fig, use_container_width=True)
 
     with cr:
         paid    = (df["payment_received"] == 1).sum()
         pending = (df["payment_received"] == 0).sum()
-        fig2 = go.Figure(go.Pie(labels=["Collected","Pending"], values=[paid, pending], hole=0.72, marker=dict(colors=["#2A5FA5","#1A2540"]), textfont=dict(size=11), hovertemplate="%{label}: %{value}<extra></extra>"))
-        fig2.add_annotation(text=f"<b>{paid+pending}</b>", x=0.5, y=0.52, showarrow=False, font=dict(color="#F5F0E8", family="Playfair Display", size=28))
-        fig2.add_annotation(text="sales", x=0.5, y=0.38, showarrow=False, font=dict(color="#5C5248", family="Jost", size=11))
+        fig2 = go.Figure(go.Pie(labels=["Collected","Pending"], values=[paid, pending], hole=0.72, marker=dict(colors=["#2E6FD8","#0F1A2E"]), textfont=dict(size=11), hovertemplate="%{label}: %{value}<extra></extra>"))
+        fig2.add_annotation(text=f"<b>{paid+pending}</b>", x=0.5, y=0.52, showarrow=False, font=dict(color="#E8EEF8", family="Playfair Display", size=28))
+        fig2.add_annotation(text="sales", x=0.5, y=0.38, showarrow=False, font=dict(color="#3D5478", family="Jost", size=11))
         styled_fig(fig2, 300).update_layout(title="Payment Status", showlegend=True, legend=dict(orientation="h", y=-0.05, x=0.25))
         st.plotly_chart(fig2, use_container_width=True)
 
     cl2, cr2 = st.columns(2)
     with cl2:
         cat_rev = df.groupby("product_category")["selling_price"].sum().reset_index()
-        fig3 = px.pie(cat_rev, values="selling_price", names="product_category", title="Revenue by Category", hole=0.55, color_discrete_sequence=["#2A5FA5","#4A80C8","#7ABFA0","#8BACC8","#C87878","#1A3D70","#3D7A5C","#4A7FA0","#9B8070","#A8C4E8"])
+        fig3 = px.pie(cat_rev, values="selling_price", names="product_category", title="Revenue by Category", hole=0.55, color_discrete_sequence=["#2E6FD8","#4D8AE8","#7ADFA0","#8BACD8","#E08090","#1A3D80","#3D9A6C","#4A9AC8","#9B9070","#A8C4F0"])
         styled_fig(fig3, 270); st.plotly_chart(fig3, use_container_width=True)
 
     with cr2:
@@ -801,8 +944,8 @@ def page_dashboard():
         daily.columns = ["date","revenue"]
         daily["rolling"] = daily["revenue"].rolling(7, min_periods=1).mean()
         fig4 = go.Figure()
-        fig4.add_trace(go.Bar(x=daily["date"], y=daily["revenue"], name="Daily", marker_color="rgba(42,95,165,0.25)", marker_line_width=0))
-        fig4.add_trace(go.Scatter(x=daily["date"], y=daily["rolling"], name="7-day avg", line=dict(color="#2A5FA5", width=1.8)))
+        fig4.add_trace(go.Bar(x=daily["date"], y=daily["revenue"], name="Daily", marker_color="rgba(46,111,216,0.25)", marker_line_width=0))
+        fig4.add_trace(go.Scatter(x=daily["date"], y=daily["rolling"], name="7-day avg", line=dict(color="#2E6FD8", width=1.8)))
         styled_fig(fig4, 270).update_layout(title="Daily Revenue", legend=dict(orientation="h", y=1.18, x=0))
         st.plotly_chart(fig4, use_container_width=True)
 
@@ -967,8 +1110,8 @@ def page_update():
         m3.metric("Updated Margin",  f"{(nprofit/ns*100 if ns>0 else 0):.1f}%")
 
         bu, bd = st.columns(2)
-        with bu: upd = st.form_submit_button("Save Changes",        use_container_width=True)
-        with bd: dlt = st.form_submit_button("Delete Transaction",   use_container_width=True)
+        with bu: upd = st.form_submit_button("Save Changes",       use_container_width=True)
+        with bd: dlt = st.form_submit_button("Delete Transaction",  use_container_width=True)
 
         if upd:
             if npa > ns:
@@ -1053,7 +1196,7 @@ def page_customers():
             hs = df[df["customer_name"]==chosen].sort_values("sale_date").copy()
             hs["cumulative"] = hs["selling_price"].cumsum()
             fig = px.line(hs, x="sale_date", y="cumulative", title=f"Cumulative Spend — {chosen}", markers=True)
-            fig.update_traces(line_color="#2A5FA5", marker_color="#4A80C8", marker_size=5)
+            fig.update_traces(line_color="#2E6FD8", marker_color="#4D8AE8", marker_size=5)
             styled_fig(fig, 230); st.plotly_chart(fig, use_container_width=True)
 
 
@@ -1082,15 +1225,15 @@ def page_analytics():
         with c1:
             monthly = df.groupby("month").agg(revenue=("selling_price","sum"), profit=("profit","sum")).reset_index()
             fig = go.Figure()
-            fig.add_trace(go.Bar(x=monthly["month"], y=monthly["revenue"], name="Revenue", marker_color="rgba(42,95,165,0.4)", marker_line_color="#2A5FA5", marker_line_width=1))
-            fig.add_trace(go.Scatter(x=monthly["month"], y=monthly["profit"], name="Profit", mode="lines+markers", line=dict(color="#7ABFA0", width=2), marker=dict(size=5)))
+            fig.add_trace(go.Bar(x=monthly["month"], y=monthly["revenue"], name="Revenue", marker_color="rgba(46,111,216,0.4)", marker_line_color="#2E6FD8", marker_line_width=1))
+            fig.add_trace(go.Scatter(x=monthly["month"], y=monthly["profit"], name="Profit", mode="lines+markers", line=dict(color="#7ADFA0", width=2), marker=dict(size=5)))
             styled_fig(fig).update_layout(title="Revenue & Profit by Month", barmode="overlay", legend=dict(orientation="h", y=1.18, x=0))
             st.plotly_chart(fig, use_container_width=True)
         with c2:
             daily = df.set_index("sale_date")["selling_price"].resample("D").sum().reset_index()
             daily.columns = ["date","revenue"]
             fig2 = px.area(daily, x="date", y="revenue", title="Daily Revenue")
-            fig2.update_traces(fillcolor="rgba(42,95,165,0.1)", line_color="#2A5FA5", line_width=1.5)
+            fig2.update_traces(fillcolor="rgba(46,111,216,0.12)", line_color="#2E6FD8", line_width=1.5)
             styled_fig(fig2); st.plotly_chart(fig2, use_container_width=True)
         c3, c4 = st.columns(2)
         with c3:
@@ -1098,29 +1241,29 @@ def page_analytics():
             dow = df.groupby("dow").agg(sales=("id","count"), revenue=("selling_price","sum")).reset_index()
             dow["dow"] = pd.Categorical(dow["dow"], categories=dow_order, ordered=True)
             dow = dow.sort_values("dow")
-            fig3 = px.bar(dow, x="dow", y="sales", title="Sales by Day of Week", color="revenue", color_continuous_scale=[[0,"#1A1714"],[1,"#2A5FA5"]])
+            fig3 = px.bar(dow, x="dow", y="sales", title="Sales by Day of Week", color="revenue", color_continuous_scale=[[0,"#070C18"],[1,"#2E6FD8"]])
             styled_fig(fig3); st.plotly_chart(fig3, use_container_width=True)
         with c4:
             monthly["MoM Growth %"] = monthly["revenue"].pct_change()*100
-            fig4 = px.bar(monthly.dropna(), x="month", y="MoM Growth %", title="Month-over-Month Growth", color="MoM Growth %", color_continuous_scale=[[0,"#B05050"],[0.5,"#2E2A24"],[1,"#7ABFA0"]])
+            fig4 = px.bar(monthly.dropna(), x="month", y="MoM Growth %", title="Month-over-Month Growth", color="MoM Growth %", color_continuous_scale=[[0,"#C05060"],[0.5,"#0F1A2E"],[1,"#7ADFA0"]])
             styled_fig(fig4); st.plotly_chart(fig4, use_container_width=True)
 
     with t2:
         c1, c2 = st.columns(2)
         with c1:
             top_c = df.groupby("customer_name")["selling_price"].sum().nlargest(10).reset_index()
-            fig5 = px.bar(top_c, x="selling_price", y="customer_name", orientation="h", title="Top 10 Customers by Revenue", color="selling_price", color_continuous_scale=[[0,"#1A1714"],[1,"#2A5FA5"]])
+            fig5 = px.bar(top_c, x="selling_price", y="customer_name", orientation="h", title="Top 10 Customers by Revenue", color="selling_price", color_continuous_scale=[[0,"#070C18"],[1,"#2E6FD8"]])
             styled_fig(fig5); fig5.update_layout(yaxis=dict(autorange="reversed")); st.plotly_chart(fig5, use_container_width=True)
         with c2:
             cp = df.groupby("customer_name")["pending_amount"].sum()
             cp = cp[cp > 0].nlargest(10).reset_index()
             if not cp.empty:
-                fig6 = px.bar(cp, x="pending_amount", y="customer_name", orientation="h", title="Top Customers by Pending", color="pending_amount", color_continuous_scale=[[0,"#1A1714"],[1,"#C87878"]])
+                fig6 = px.bar(cp, x="pending_amount", y="customer_name", orientation="h", title="Top Customers by Pending", color="pending_amount", color_continuous_scale=[[0,"#070C18"],[1,"#C05060"]])
                 styled_fig(fig6); fig6.update_layout(yaxis=dict(autorange="reversed")); st.plotly_chart(fig6, use_container_width=True)
             else:
                 st.success("No pending amounts.")
         cust_stats = df.groupby("customer_name").agg(visits=("id","count"), revenue=("selling_price","sum"), avg_order=("selling_price","mean")).reset_index()
-        fig_scatter = px.scatter(cust_stats, x="visits", y="revenue", size="avg_order", hover_name="customer_name", title="Customer Value Matrix", color="revenue", color_continuous_scale=[[0,"#1A1714"],[1,"#2A5FA5"]])
+        fig_scatter = px.scatter(cust_stats, x="visits", y="revenue", size="avg_order", hover_name="customer_name", title="Customer Value Matrix", color="revenue", color_continuous_scale=[[0,"#070C18"],[1,"#2E6FD8"]])
         styled_fig(fig_scatter, 330); st.plotly_chart(fig_scatter, use_container_width=True)
         seg = df.groupby("customer_name").agg(spend=("selling_price","sum")).reset_index()
         seg["tier"] = pd.cut(seg["spend"], bins=[0,5000,20000,50000,float("inf")], labels=["Bronze","Silver","Gold","Platinum"])
@@ -1133,28 +1276,28 @@ def page_analytics():
         c1, c2 = st.columns(2)
         with c1:
             cd = df.groupby("product_category").size().reset_index(name="count")
-            fig7 = px.pie(cd, values="count", names="product_category", title="Sales Volume by Category", hole=0.55, color_discrete_sequence=["#2A5FA5","#4A80C8","#7ABFA0","#8BACC8","#C87878","#1A3D70","#3D7A5C","#4A7FA0","#9B8070","#A8C4E8"])
+            fig7 = px.pie(cd, values="count", names="product_category", title="Sales Volume by Category", hole=0.55, color_discrete_sequence=["#2E6FD8","#4D8AE8","#7ADFA0","#8BACD8","#E08090","#1A3D80","#3D9A6C","#4A9AC8","#9B9070","#A8C4F0"])
             styled_fig(fig7); st.plotly_chart(fig7, use_container_width=True)
         with c2:
             cp2 = df.groupby("product_category").agg(profit=("profit","sum"), revenue=("selling_price","sum")).reset_index()
             cp2["margin"] = (cp2["profit"]/cp2["revenue"]*100).round(1)
-            fig8 = px.bar(cp2, x="product_category", y="profit", title="Profit by Category", color="margin", color_continuous_scale=[[0,"#1A1714"],[1,"#7ABFA0"]])
+            fig8 = px.bar(cp2, x="product_category", y="profit", title="Profit by Category", color="margin", color_continuous_scale=[[0,"#070C18"],[1,"#7ADFA0"]])
             styled_fig(fig8); st.plotly_chart(fig8, use_container_width=True)
         cm = df.groupby(["month","product_category"])["selling_price"].sum().unstack(fill_value=0)
         if not cm.empty:
-            fig9 = px.imshow(cm.T, title="Category × Month Heatmap", color_continuous_scale=[[0,"#1A1714"],[0.4,"#6B5A2E"],[1,"#2A5FA5"]], aspect="auto")
+            fig9 = px.imshow(cm.T, title="Category × Month Heatmap", color_continuous_scale=[[0,"#070C18"],[0.4,"#1A3D80"],[1,"#2E6FD8"]], aspect="auto")
             styled_fig(fig9, 300); st.plotly_chart(fig9, use_container_width=True)
 
     with t4:
         c1, c2 = st.columns(2)
         with c1:
             pm = df.groupby("payment_method").size().reset_index(name="count")
-            fig10 = px.pie(pm, values="count", names="payment_method", title="Payment Method Distribution", hole=0.58, color_discrete_sequence=["#2A5FA5","#4A80C8","#7ABFA0","#8BACC8","#1A3D70","#C87878"])
+            fig10 = px.pie(pm, values="count", names="payment_method", title="Payment Method Distribution", hole=0.58, color_discrete_sequence=["#2E6FD8","#4D8AE8","#7ADFA0","#8BACD8","#1A3D80","#E08090"])
             styled_fig(fig10); st.plotly_chart(fig10, use_container_width=True)
         with c2:
             ps = df.groupby("payment_received").agg(count=("id","count"), total=("pending_amount","sum")).reset_index()
             ps["label"] = ps["payment_received"].map({0:"Pending",1:"Received"})
-            fig11 = px.bar(ps, x="label", y="count", title="Payment Status", color="label", color_discrete_map={"Pending":"#2A5FA5","Received":"#7ABFA0"})
+            fig11 = px.bar(ps, x="label", y="count", title="Payment Status", color="label", color_discrete_map={"Pending":"#2E6FD8","Received":"#7ADFA0"})
             styled_fig(fig11); st.plotly_chart(fig11, use_container_width=True)
         aged = df[df["pending_amount"] > 0].copy()
         if not aged.empty:
@@ -1162,7 +1305,7 @@ def page_analytics():
             aged["days"] = (today_ts - aged["sale_date"]).dt.days
             aged["bucket"] = pd.cut(aged["days"], bins=[0,7,15,30,60,9999], labels=["0–7d","8–15d","16–30d","31–60d","60d+"])
             ag = aged.groupby("bucket", observed=True)["pending_amount"].sum().reset_index()
-            fig12 = px.bar(ag, x="bucket", y="pending_amount", title="Pending — Aging Buckets", color="pending_amount", color_continuous_scale=[[0,"#2A5FA5"],[1,"#B05050"]])
+            fig12 = px.bar(ag, x="bucket", y="pending_amount", title="Pending — Aging Buckets", color="pending_amount", color_continuous_scale=[[0,"#2E6FD8"],[1,"#C05060"]])
             styled_fig(fig12); st.plotly_chart(fig12, use_container_width=True)
         else:
             st.success("No pending payments.")
@@ -1173,7 +1316,7 @@ def page_analytics():
             if "vendor" in df.columns:
                 vd = (df[df["vendor"].astype(str).str.strip() != ""].groupby("vendor").agg(revenue=("selling_price","sum"), items=("id","count")).nlargest(10,"revenue").reset_index())
                 if not vd.empty:
-                    fig13 = px.bar(vd, x="revenue", y="vendor", orientation="h", title="Top Vendors by Revenue", color="revenue", color_continuous_scale=[[0,"#1A1714"],[1,"#2A5FA5"]])
+                    fig13 = px.bar(vd, x="revenue", y="vendor", orientation="h", title="Top Vendors by Revenue", color="revenue", color_continuous_scale=[[0,"#070C18"],[1,"#2E6FD8"]])
                     styled_fig(fig13); fig13.update_layout(yaxis=dict(autorange="reversed")); st.plotly_chart(fig13, use_container_width=True)
                 else:
                     st.info("Add vendor names to see this chart.")
@@ -1183,7 +1326,7 @@ def page_analytics():
                 if not pd2.empty:
                     tm = (pd2.groupby("product_description").agg(margin=("margin","mean"), revenue=("selling_price","sum")).nlargest(10,"margin").reset_index())
                     tm["product_description"] = tm["product_description"].str[:30]
-                    fig14 = px.bar(tm, x="margin", y="product_description", orientation="h", title="Top Products by Margin %", color="margin", color_continuous_scale=[[0,"#1A1714"],[1,"#7ABFA0"]])
+                    fig14 = px.bar(tm, x="margin", y="product_description", orientation="h", title="Top Products by Margin %", color="margin", color_continuous_scale=[[0,"#070C18"],[1,"#7ADFA0"]])
                     styled_fig(fig14); fig14.update_layout(yaxis=dict(autorange="reversed")); st.plotly_chart(fig14, use_container_width=True)
                 else:
                     st.info("Add product descriptions to see this chart.")
@@ -1297,7 +1440,7 @@ def page_inventory():
             st.dataframe(view, use_container_width=True, hide_index=True)
             if "category" in inv_df.columns and "quantity" in inv_df.columns:
                 cat_stock = inv_df.groupby("category")["quantity"].sum().reset_index()
-                fig = px.bar(cat_stock, x="category", y="quantity", title="Stock by Category", color="quantity", color_continuous_scale=[[0,"#B05050"],[0.4,"#2A5FA5"],[1,"#7ABFA0"]])
+                fig = px.bar(cat_stock, x="category", y="quantity", title="Stock by Category", color="quantity", color_continuous_scale=[[0,"#C05060"],[0.4,"#2E6FD8"],[1,"#7ADFA0"]])
                 styled_fig(fig, 260); st.plotly_chart(fig, use_container_width=True)
 
     with t2:
@@ -1335,15 +1478,11 @@ def main():
     if "logged_in" not in st.session_state:
         st.session_state.logged_in = False
 
-    # ── PUBLIC MODE: Add Sale as landing page ──
     if not st.session_state.logged_in:
-        # No sidebar in public mode — keep it clean
         page_add_sale(public=True)
-        # Admin sign-in strip at the very bottom
         render_admin_login_strip()
         return
 
-    # ── ADMIN MODE: full sidebar + all pages ──
     page = sidebar()
 
     if   "Dashboard"   in page: page_dashboard()
