@@ -309,16 +309,19 @@ h4, h5, h6 {
 .stTextInput > div > div > input,
 .stNumberInput > div > div > input,
 .stTextArea > div > div > textarea,
-.stDateInput > div > div > input {
+.stDateInput > div > div > input,
+.stDateInput input,
+input[type="text"], input[type="number"], input[type="date"], textarea {
     background: var(--navy-3) !important;
     border: 1px solid var(--border) !important;
     border-radius: var(--r) !important;
-    color: var(--cream) !important;
+    color: #FFFFFF !important;
     font-family: 'Jost', sans-serif !important;
     font-size: 0.88rem !important;
     font-weight: 300 !important;
     padding: 0.6rem 0.9rem !important;
     transition: border-color 0.2s ease !important;
+    -webkit-text-fill-color: #FFFFFF !important;
 }
 .stTextInput > div > div > input:focus,
 .stNumberInput > div > div > input:focus,
@@ -326,18 +329,61 @@ h4, h5, h6 {
 .stDateInput > div > div > input:focus {
     border-color: var(--blue) !important;
     box-shadow: 0 0 0 3px rgba(46,111,216,0.15) !important;
+    color: #FFFFFF !important;
+    -webkit-text-fill-color: #FFFFFF !important;
 }
 .stTextInput > div > div > input::placeholder,
-.stTextArea > div > div > textarea::placeholder { color: var(--navy-5) !important; }
+.stTextArea > div > div > textarea::placeholder,
+.stDateInput > div > div > input::placeholder { color: var(--muted) !important; -webkit-text-fill-color: var(--muted) !important; }
 
-.stSelectbox > div > div {
+/* Date picker calendar popup */
+[data-baseweb="calendar"] {
+    background: var(--navy-3) !important;
+    border: 1px solid var(--border) !important;
+}
+[data-baseweb="calendar"] * { color: #FFFFFF !important; background: transparent !important; }
+[data-baseweb="calendar"] [aria-selected="true"] { background: var(--blue) !important; }
+[data-baseweb="calendar"] button:hover { background: var(--navy-5) !important; }
+
+/* Date input wrapper */
+.stDateInput > div {
+    background: var(--navy-3) !important;
+    border-radius: var(--r) !important;
+}
+.stDateInput > div > div { background: var(--navy-3) !important; }
+.stDateInput svg { fill: var(--muted) !important; }
+
+/* Selectbox */
+.stSelectbox > div > div,
+.stSelectbox [data-baseweb="select"] > div {
     background: var(--navy-3) !important;
     border: 1px solid var(--border) !important;
     border-radius: var(--r) !important;
-    color: var(--cream) !important;
+    color: #FFFFFF !important;
     transition: border-color 0.2s ease !important;
 }
-.stSelectbox > div > div:hover { border-color: var(--border-hover) !important; }
+.stSelectbox > div > div:hover,
+.stSelectbox [data-baseweb="select"] > div:hover { border-color: var(--border-hover) !important; }
+.stSelectbox [data-baseweb="select"] span,
+.stSelectbox [data-baseweb="select"] div { color: #FFFFFF !important; }
+
+/* Selectbox dropdown menu */
+[data-baseweb="popover"] [data-baseweb="menu"],
+[data-baseweb="popover"] ul {
+    background: var(--navy-3) !important;
+    border: 1px solid var(--border) !important;
+}
+[data-baseweb="popover"] li,
+[data-baseweb="popover"] [role="option"] {
+    background: var(--navy-3) !important;
+    color: #FFFFFF !important;
+}
+[data-baseweb="popover"] li:hover,
+[data-baseweb="popover"] [role="option"]:hover { background: var(--navy-5) !important; }
+
+/* Number input */
+.stNumberInput > div > div { background: var(--navy-3) !important; border-radius: var(--r) !important; }
+.stNumberInput input { color: #FFFFFF !important; -webkit-text-fill-color: #FFFFFF !important; }
 
 /* ━━━ LABELS ━━━ */
 .stTextInput label, .stNumberInput label, .stSelectbox label,
