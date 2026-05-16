@@ -15,7 +15,7 @@ load_dotenv("credentials/.env")
 # =====================================================
 
 st.set_page_config(
-    page_title="Maison",
+    page_title="Vinay",
     page_icon="◆",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -35,10 +35,10 @@ st.markdown("""
     --ink-3:        #2E2A24;
     --ink-4:        #3A342C;
     --ink-5:        #47403A;
-    --gold:         #B8963E;
-    --gold-soft:    #D4B06A;
-    --gold-pale:    #EDD99A;
-    --gold-glow:    rgba(184,150,62,0.12);
+    --gold:         #2A5FA5;
+    --gold-soft:    #4A80C8;
+    --gold-pale:    #A8C4E8;
+    --gold-glow:    rgba(42,95,165,0.12);
     --cream:        #F5F0E8;
     --cream-dim:    #E8E0D0;
     --muted:        #8C8070;
@@ -49,8 +49,8 @@ st.markdown("""
     --r:            8px;
     --r-lg:         14px;
     --r-xl:         20px;
-    --border:       rgba(184,150,62,0.14);
-    --border-hover: rgba(184,150,62,0.32);
+    --border:       rgba(42,95,165,0.14);
+    --border-hover: rgba(42,95,165,0.32);
     --shadow:       0 2px 24px rgba(0,0,0,0.4);
     --shadow-lg:    0 8px 48px rgba(0,0,0,0.55);
 }
@@ -65,15 +65,15 @@ html, body, [class*="css"] {
 .stApp {
     background: var(--ink) !important;
     background-image:
-        radial-gradient(ellipse 900px 600px at 0% 0%, rgba(184,150,62,0.05) 0%, transparent 70%),
-        radial-gradient(ellipse 700px 500px at 100% 100%, rgba(184,150,62,0.035) 0%, transparent 70%);
+        radial-gradient(ellipse 900px 600px at 0% 0%, rgba(42,95,165,0.06) 0%, transparent 70%),
+        radial-gradient(ellipse 700px 500px at 100% 100%, rgba(42,95,165,0.04) 0%, transparent 70%);
     background-attachment: fixed;
 }
 
 /* ━━━ SCROLLBAR ━━━ */
 ::-webkit-scrollbar { width: 3px; height: 3px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(184,150,62,0.3); border-radius: 99px; }
+::-webkit-scrollbar-thumb { background: rgba(42,95,165,0.35); border-radius: 99px; }
 
 /* ━━━ TYPOGRAPHY ━━━ */
 h1, h2, h3 {
@@ -111,13 +111,13 @@ h4, h5, h6 {
 }
 .rule {
     height: 1px;
-    background: linear-gradient(90deg, var(--gold) 0%, rgba(184,150,62,0.2) 60%, transparent 100%);
+    background: linear-gradient(90deg, var(--gold) 0%, rgba(42,95,165,0.2) 60%, transparent 100%);
     margin: 2rem 0;
     border: none;
 }
 .rule-sm {
     height: 1px;
-    background: linear-gradient(90deg, rgba(184,150,62,0.3), transparent);
+    background: linear-gradient(90deg, rgba(42,95,165,0.35), transparent);
     margin: 1.2rem 0;
     border: none;
 }
@@ -167,7 +167,7 @@ h4, h5, h6 {
     align-items: center;
 }
 [data-testid="stSidebar"] .stRadio > div > label:hover {
-    background: rgba(184,150,62,0.07) !important;
+    background: rgba(42,95,165,0.1) !important;
     color: var(--cream) !important;
 }
 /* hide radio dot */
@@ -242,7 +242,7 @@ h4, h5, h6 {
     width: 100% !important;
 }
 .stButton > button:hover {
-    background: rgba(184,150,62,0.1) !important;
+    background: rgba(42,95,165,0.1) !important;
     border-color: var(--gold) !important;
     color: var(--gold-pale) !important;
     transform: translateY(-1px) !important;
@@ -284,7 +284,7 @@ h4, h5, h6 {
 .stForm button[type="submit"]:hover {
     background: var(--gold-soft) !important;
     transform: translateY(-2px) !important;
-    box-shadow: 0 6px 24px rgba(184,150,62,0.3) !important;
+    box-shadow: 0 6px 24px rgba(42,95,165,0.35) !important;
 }
 
 /* ━━━ INPUTS ━━━ */
@@ -307,7 +307,7 @@ h4, h5, h6 {
 .stTextArea > div > div > textarea:focus,
 .stDateInput > div > div > input:focus {
     border-color: var(--gold) !important;
-    box-shadow: 0 0 0 3px rgba(184,150,62,0.08) !important;
+    box-shadow: 0 0 0 3px rgba(42,95,165,0.1) !important;
 }
 .stTextInput > div > div > input::placeholder,
 .stTextArea > div > div > textarea::placeholder { color: var(--ink-5) !important; }
@@ -354,7 +354,7 @@ h4, h5, h6 {
     color: var(--cream) !important;
     font-size: 0.85rem !important;
     font-weight: 300 !important;
-    border-bottom: 1px solid rgba(184,150,62,0.05) !important;
+    border-bottom: 1px solid rgba(42,95,165,0.06) !important;
     padding: 0.7rem 1rem !important;
 }
 [data-testid="stDataFrame"] tr:hover td {
@@ -427,8 +427,8 @@ h4, h5, h6 {
     border-radius: var(--r) !important;
 }
 .stWarning {
-    background: rgba(184,150,62,0.1) !important;
-    border: 1px solid rgba(184,150,62,0.28) !important;
+    background: rgba(42,95,165,0.1) !important;
+    border: 1px solid rgba(42,95,165,0.28) !important;
     border-radius: var(--r) !important;
 }
 .stError {
@@ -535,7 +535,7 @@ h4, h5, h6 {
     padding: 0.22rem 0.65rem;
     border-radius: 4px;
 }
-.badge-gold    { background: rgba(184,150,62,0.15); color: var(--gold-soft); }
+.badge-gold    { background: rgba(42,95,165,0.15); color: var(--gold-soft); }
 .badge-green   { background: rgba(61,122,92,0.15);  color: #7ABFA0; }
 .badge-red     { background: rgba(176,80,80,0.15);  color: #D88080; }
 .badge-muted   { background: var(--ink-4); color: var(--muted); }
@@ -575,30 +575,30 @@ PLOT_LAYOUT = dict(
     font=dict(family="Jost", color="#5C5248", size=11),
     title=dict(font=dict(family="Playfair Display", size=17, color="#E8E0D0"), pad=dict(b=12), x=0),
     xaxis=dict(
-        gridcolor="rgba(184,150,62,0.06)",
-        linecolor="rgba(184,150,62,0.12)",
+        gridcolor="rgba(42,95,165,0.06)",
+        linecolor="rgba(42,95,165,0.12)",
         tickfont=dict(size=10, color="#5C5248"),
         showgrid=True,
         zeroline=False,
     ),
     yaxis=dict(
-        gridcolor="rgba(184,150,62,0.06)",
-        linecolor="rgba(184,150,62,0.12)",
+        gridcolor="rgba(42,95,165,0.06)",
+        linecolor="rgba(42,95,165,0.12)",
         tickfont=dict(size=10, color="#5C5248"),
         showgrid=True,
         zeroline=False,
     ),
     legend=dict(
         bgcolor="rgba(26,23,20,0.85)",
-        bordercolor="rgba(184,150,62,0.18)",
+        bordercolor="rgba(42,95,165,0.18)",
         borderwidth=1,
         font=dict(color="#8C8070", size=10),
     ),
     margin=dict(l=12, r=12, t=44, b=12),
-    colorway=["#B8963E","#D4B06A","#7ABFA0","#8BACC8","#C87878","#6B5A2E","#3D7A5C","#4A7FA0"],
+    colorway=["#2A5FA5","#4A80C8","#7ABFA0","#8BACC8","#C87878","#1A3D70","#3D7A5C","#4A7FA0"],
     hoverlabel=dict(
         bgcolor="rgba(26,23,20,0.96)",
-        bordercolor="rgba(184,150,62,0.25)",
+        bordercolor="rgba(42,95,165,0.25)",
         font=dict(color="#F5F0E8", size=11, family="Jost"),
         align="left",
     ),
@@ -737,9 +737,9 @@ def to_excel(df: pd.DataFrame) -> BytesIO:
             ws.column_dimensions[ws.cell(1, i).column_letter].width = min(ml, 45)
 
         from openpyxl.styles import Font, PatternFill, Alignment
-        gold_fill = PatternFill("solid", fgColor="B8963E")
+        gold_fill = PatternFill("solid", fgColor="2A5FA5")
         for cell in ws[1]:
-            cell.font = Font(bold=True, color="1A1714")
+            cell.font = Font(bold=True, color="F0F4FA")
             cell.fill = gold_fill
             cell.alignment = Alignment(horizontal="center")
 
@@ -771,7 +771,7 @@ def login():
         st.markdown("""
         <div class='login-outer'>
           <div class='login-card'>
-            <div class='login-name'>Maison</div>
+            <div class='login-name'>Vinay</div>
             <div class='login-sub'>◆ Boutique Management ◆</div>
           </div>
         </div>
@@ -805,7 +805,7 @@ def sidebar():
     with st.sidebar:
         st.markdown("""
         <div class='sb-brand'>
-            <div class='sb-logo'>Maison</div>
+            <div class='sb-logo'>Vinay</div>
             <div class='sb-mark'>Boutique Manager</div>
         </div>
         """, unsafe_allow_html=True)
@@ -902,8 +902,8 @@ def page_dashboard():
         fig.add_trace(go.Bar(
             x=monthly["month"], y=monthly["revenue"],
             name="Revenue",
-            marker_color="rgba(184,150,62,0.35)",
-            marker_line_color="#B8963E",
+            marker_color="rgba(42,95,165,0.4)",
+            marker_line_color="#2A5FA5",
             marker_line_width=1,
         ))
         fig.add_trace(go.Scatter(
@@ -928,7 +928,7 @@ def page_dashboard():
             labels=["Collected", "Pending"],
             values=[paid, pending],
             hole=0.72,
-            marker=dict(colors=["#B8963E", "#2E2A24"]),
+            marker=dict(colors=["#2A5FA5", "#1A2540"]),
             textfont=dict(size=11),
             hovertemplate="%{label}: %{value}<extra></extra>",
         ))
@@ -955,8 +955,8 @@ def page_dashboard():
         fig3 = px.pie(
             cat_rev, values="selling_price", names="product_category",
             title="Revenue by Category", hole=0.55,
-            color_discrete_sequence=["#B8963E","#D4B06A","#7ABFA0","#8BACC8",
-                                      "#C87878","#6B5A2E","#3D7A5C","#4A7FA0","#9B8070","#EDD99A"],
+            color_discrete_sequence=["#2A5FA5","#4A80C8","#7ABFA0","#8BACC8",
+                                      "#C87878","#1A3D70","#3D7A5C","#4A7FA0","#9B8070","#A8C4E8"],
         )
         styled_fig(fig3, 270)
         st.plotly_chart(fig3, use_container_width=True)
@@ -969,12 +969,12 @@ def page_dashboard():
         fig4 = go.Figure()
         fig4.add_trace(go.Bar(
             x=daily["date"], y=daily["revenue"],
-            name="Daily", marker_color="rgba(184,150,62,0.25)",
+            name="Daily", marker_color="rgba(42,95,165,0.25)",
             marker_line_width=0,
         ))
         fig4.add_trace(go.Scatter(
             x=daily["date"], y=daily["rolling"],
-            name="7-day avg", line=dict(color="#B8963E", width=1.8),
+            name="7-day avg", line=dict(color="#2A5FA5", width=1.8),
         ))
         styled_fig(fig4, 270).update_layout(
             title="Daily Revenue",
@@ -1438,7 +1438,7 @@ def page_customers():
             hist_sorted["cumulative"] = hist_sorted["selling_price"].cumsum()
             fig = px.line(hist_sorted, x="sale_date", y="cumulative",
                           title=f"Cumulative Spend — {chosen}", markers=True)
-            fig.update_traces(line_color="#B8963E", marker_color="#D4B06A", marker_size=5)
+            fig.update_traces(line_color="#2A5FA5", marker_color="#4A80C8", marker_size=5)
             styled_fig(fig, 230)
             st.plotly_chart(fig, use_container_width=True)
 
@@ -1474,7 +1474,7 @@ def page_analytics():
             monthly = df.groupby("month").agg(revenue=("selling_price","sum"), profit=("profit","sum")).reset_index()
             fig = go.Figure()
             fig.add_trace(go.Bar(x=monthly["month"], y=monthly["revenue"], name="Revenue",
-                                 marker_color="rgba(184,150,62,0.35)", marker_line_color="#B8963E", marker_line_width=1))
+                                 marker_color="rgba(42,95,165,0.4)", marker_line_color="#2A5FA5", marker_line_width=1))
             fig.add_trace(go.Scatter(x=monthly["month"], y=monthly["profit"], name="Profit",
                                      mode="lines+markers", line=dict(color="#7ABFA0", width=2), marker=dict(size=5)))
             styled_fig(fig).update_layout(title="Revenue & Profit by Month", barmode="overlay",
@@ -1485,7 +1485,7 @@ def page_analytics():
             daily = df.set_index("sale_date")["selling_price"].resample("D").sum().reset_index()
             daily.columns = ["date", "revenue"]
             fig2 = px.area(daily, x="date", y="revenue", title="Daily Revenue")
-            fig2.update_traces(fillcolor="rgba(184,150,62,0.1)", line_color="#B8963E", line_width=1.5)
+            fig2.update_traces(fillcolor="rgba(42,95,165,0.1)", line_color="#2A5FA5", line_width=1.5)
             styled_fig(fig2)
             st.plotly_chart(fig2, use_container_width=True)
 
@@ -1496,7 +1496,7 @@ def page_analytics():
             dow["dow"] = pd.Categorical(dow["dow"], categories=dow_order, ordered=True)
             dow = dow.sort_values("dow")
             fig3 = px.bar(dow, x="dow", y="sales", title="Sales by Day of Week",
-                          color="revenue", color_continuous_scale=[[0,"#1A1714"],[1,"#B8963E"]])
+                          color="revenue", color_continuous_scale=[[0,"#1A1714"],[1,"#2A5FA5"]])
             styled_fig(fig3); st.plotly_chart(fig3, use_container_width=True)
 
         with c4:
@@ -1513,7 +1513,7 @@ def page_analytics():
             top_c = df.groupby("customer_name")["selling_price"].sum().nlargest(10).reset_index()
             fig5  = px.bar(top_c, x="selling_price", y="customer_name", orientation="h",
                            title="Top 10 Customers by Revenue",
-                           color="selling_price", color_continuous_scale=[[0,"#1A1714"],[1,"#B8963E"]])
+                           color="selling_price", color_continuous_scale=[[0,"#1A1714"],[1,"#2A5FA5"]])
             styled_fig(fig5); fig5.update_layout(yaxis=dict(autorange="reversed"))
             st.plotly_chart(fig5, use_container_width=True)
 
@@ -1534,7 +1534,7 @@ def page_analytics():
         ).reset_index()
         fig_scatter = px.scatter(cust_stats, x="visits", y="revenue", size="avg_order",
             hover_name="customer_name", title="Customer Value Matrix (size = avg order)",
-            color="revenue", color_continuous_scale=[[0,"#1A1714"],[1,"#B8963E"]])
+            color="revenue", color_continuous_scale=[[0,"#1A1714"],[1,"#2A5FA5"]])
         styled_fig(fig_scatter, 330); st.plotly_chart(fig_scatter, use_container_width=True)
 
         seg = df.groupby("customer_name").agg(spend=("selling_price","sum")).reset_index()
@@ -1551,8 +1551,8 @@ def page_analytics():
             cd = df.groupby("product_category").size().reset_index(name="count")
             fig7 = px.pie(cd, values="count", names="product_category",
                           title="Sales Volume by Category", hole=0.55,
-                          color_discrete_sequence=["#B8963E","#D4B06A","#7ABFA0","#8BACC8",
-                                                    "#C87878","#6B5A2E","#3D7A5C","#4A7FA0","#9B8070","#EDD99A"])
+                          color_discrete_sequence=["#2A5FA5","#4A80C8","#7ABFA0","#8BACC8",
+                                                    "#C87878","#1A3D70","#3D7A5C","#4A7FA0","#9B8070","#A8C4E8"])
             styled_fig(fig7); st.plotly_chart(fig7, use_container_width=True)
 
         with c2:
@@ -1565,7 +1565,7 @@ def page_analytics():
         cm = df.groupby(["month","product_category"])["selling_price"].sum().unstack(fill_value=0)
         if not cm.empty:
             fig9 = px.imshow(cm.T, title="Category × Month Heatmap",
-                             color_continuous_scale=[[0,"#1A1714"],[0.4,"#6B5A2E"],[1,"#B8963E"]], aspect="auto")
+                             color_continuous_scale=[[0,"#1A1714"],[0.4,"#6B5A2E"],[1,"#2A5FA5"]], aspect="auto")
             styled_fig(fig9, 300); st.plotly_chart(fig9, use_container_width=True)
 
     with t4:
@@ -1574,14 +1574,14 @@ def page_analytics():
             pm = df.groupby("payment_method").size().reset_index(name="count")
             fig10 = px.pie(pm, values="count", names="payment_method",
                            title="Payment Method Distribution", hole=0.58,
-                           color_discrete_sequence=["#B8963E","#D4B06A","#7ABFA0","#8BACC8","#6B5A2E","#C87878"])
+                           color_discrete_sequence=["#2A5FA5","#4A80C8","#7ABFA0","#8BACC8","#1A3D70","#C87878"])
             styled_fig(fig10); st.plotly_chart(fig10, use_container_width=True)
 
         with c2:
             ps = df.groupby("payment_received").agg(count=("id","count"), total=("pending_amount","sum")).reset_index()
             ps["label"] = ps["payment_received"].map({0: "Pending", 1: "Received"})
             fig11 = px.bar(ps, x="label", y="count", title="Payment Status",
-                           color="label", color_discrete_map={"Pending":"#B8963E","Received":"#7ABFA0"})
+                           color="label", color_discrete_map={"Pending":"#2A5FA5","Received":"#7ABFA0"})
             styled_fig(fig11); st.plotly_chart(fig11, use_container_width=True)
 
         aged = df[df["pending_amount"] > 0].copy()
@@ -1592,7 +1592,7 @@ def page_analytics():
                                     labels=["0–7d","8–15d","16–30d","31–60d","60d+"])
             ag = aged.groupby("bucket", observed=True)["pending_amount"].sum().reset_index()
             fig12 = px.bar(ag, x="bucket", y="pending_amount", title="Pending — Aging Buckets",
-                           color="pending_amount", color_continuous_scale=[[0,"#B8963E"],[1,"#B05050"]])
+                           color="pending_amount", color_continuous_scale=[[0,"#2A5FA5"],[1,"#B05050"]])
             styled_fig(fig12); st.plotly_chart(fig12, use_container_width=True)
         else:
             st.success("No pending payments.")
@@ -1606,7 +1606,7 @@ def page_analytics():
                       .nlargest(10, "revenue").reset_index())
                 if not vd.empty:
                     fig13 = px.bar(vd, x="revenue", y="vendor", orientation="h", title="Top Vendors by Revenue",
-                                   color="revenue", color_continuous_scale=[[0,"#1A1714"],[1,"#B8963E"]])
+                                   color="revenue", color_continuous_scale=[[0,"#1A1714"],[1,"#2A5FA5"]])
                     styled_fig(fig13); fig13.update_layout(yaxis=dict(autorange="reversed"))
                     st.plotly_chart(fig13, use_container_width=True)
                 else:
@@ -1762,7 +1762,7 @@ def page_inventory():
             if "category" in inv_df.columns and "quantity" in inv_df.columns:
                 cat_stock = inv_df.groupby("category")["quantity"].sum().reset_index()
                 fig = px.bar(cat_stock, x="category", y="quantity", title="Stock by Category",
-                             color="quantity", color_continuous_scale=[[0,"#B05050"],[0.4,"#B8963E"],[1,"#7ABFA0"]])
+                             color="quantity", color_continuous_scale=[[0,"#B05050"],[0.4,"#2A5FA5"],[1,"#7ABFA0"]])
                 styled_fig(fig, 260); st.plotly_chart(fig, use_container_width=True)
 
     with t2:
