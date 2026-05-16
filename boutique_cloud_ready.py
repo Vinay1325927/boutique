@@ -8,10 +8,18 @@ import plotly.graph_objects as go
 from io import BytesIO
 import os
 from dotenv import load_dotenv
-
-# Load environment variables
-load_dotenv()
 import urllib.parse
+
+load_dotenv("credentials/.env")
+
+MONGO_URI    = os.getenv("MONGO_URI")
+ADMIN_USER   = os.getenv("ADMIN_USER")
+ADMIN_PASS   = os.getenv("ADMIN_PASS")
+
+
+USERS = {
+    ADMIN_USER:   ADMIN_PASS,
+}
 
 # =====================================================
 # PAGE CONFIG
