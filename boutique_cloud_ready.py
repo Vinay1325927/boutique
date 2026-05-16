@@ -428,10 +428,15 @@ input[type="text"], input[type="number"], input[type="date"], textarea {
 
 /* ━━━ LABELS ━━━ */
 .stTextInput label, .stNumberInput label, .stSelectbox label,
-.stTextArea label, .stDateInput label, .stRadio label, .stCheckbox label {
-    color: var(--muted) !important;
-    font-size: 0.68rem !important;
-    font-weight: 600 !important;
+.stTextArea label, .stDateInput label, .stRadio label, .stCheckbox label,
+.stTextInput label p, .stNumberInput label p, .stSelectbox label p,
+.stTextArea label p, .stDateInput label p, .stRadio label p,
+[data-testid="stWidgetLabel"], [data-testid="stWidgetLabel"] p,
+[data-testid="stWidgetLabel"] span {
+    color: #FFFFFF !important;
+    -webkit-text-fill-color: #FFFFFF !important;
+    font-size: 0.75rem !important;
+    font-weight: 700 !important;
     text-transform: uppercase !important;
     letter-spacing: 0.14em !important;
     font-family: 'Jost', sans-serif !important;
