@@ -58,7 +58,48 @@ st.markdown("""
 html, body, [class*="css"] {
     font-family: 'Jost', sans-serif !important;
     background: var(--navy-1) !important;
-    color: var(--cream) !important;
+    color: #FFFFFF !important;
+}
+
+/* ━━━ NUCLEAR WHITE TEXT — all inputs/selects/dates ━━━ */
+input:not([type="radio"]):not([type="checkbox"]),
+textarea,
+[data-baseweb="input"] input,
+[data-baseweb="base-input"] input,
+[data-baseweb="textarea"] textarea,
+[data-baseweb="date-picker"] input,
+[data-baseweb="select"] input {
+    color: #FFFFFF !important;
+    -webkit-text-fill-color: #FFFFFF !important;
+    caret-color: #FFFFFF !important;
+    background-color: var(--navy-3) !important;
+}
+[data-baseweb="input"] *,
+[data-baseweb="base-input"] *,
+[data-baseweb="textarea"] * {
+    color: #FFFFFF !important;
+    -webkit-text-fill-color: #FFFFFF !important;
+}
+/* Selectbox displayed value */
+[data-baseweb="select"] > div > div,
+[data-baseweb="select"] > div > div > div,
+[data-baseweb="select"] span,
+[class*="ValueContainer"] > div,
+[class*="singleValue"] {
+    color: #FFFFFF !important;
+    -webkit-text-fill-color: #FFFFFF !important;
+}
+/* Number stepper */
+.stNumberInput div[data-baseweb="input"] input,
+.stNumberInput input[type="number"] {
+    color: #FFFFFF !important;
+    -webkit-text-fill-color: #FFFFFF !important;
+}
+/* Date displayed value */
+.stDateInput div[data-baseweb="input"] input,
+.stDateInput input[type="text"] {
+    color: #FFFFFF !important;
+    -webkit-text-fill-color: #FFFFFF !important;
 }
 .stApp {
     background: var(--navy-1) !important;
