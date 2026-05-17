@@ -73,24 +73,6 @@ st.markdown("""
     --shadow-lg:    0 8px 48px rgba(0,0,0,0.65);
 }
 
-/* ━━━ SIDEBAR THEME TOGGLE ━━━ */
-[data-testid="stSidebar"] > div:first-child > div:first-child .stButton > button {
-    background: transparent !important;
-    border: 1px solid var(--border) !important;
-    color: var(--muted) !important;
-    font-size: 0.7rem !important;
-    padding: 0.3rem 0.8rem !important;
-    letter-spacing: 0.08em !important;
-    width: auto !important;
-    float: right;
-    margin-bottom: 0.5rem;
-}
-[data-testid="stSidebar"] > div:first-child > div:first-child .stButton > button:hover {
-    border-color: var(--border-hover) !important;
-    color: var(--cream) !important;
-    transform: none !important;
-    background: rgba(46,111,216,0.1) !important;
-}
 
 html, body, [class*="css"] {
     font-family: 'Jost', sans-serif !important;
@@ -654,137 +636,7 @@ button[data-testid="stNumberInputStepUp"] {
 # =====================================================
 
 
-# ── THEME TOGGLE — pure session_state, no JS needed ─────────────────────────
-if "theme" not in st.session_state:
-    st.session_state.theme = "dark"
-
-_LIGHT_CSS = """
-<style>
-/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-   LIGHT MODE — clean white
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
-.stApp,
-.stApp > div, .main, .main > div, section.main, section.main > div,
-[data-testid="stAppViewContainer"], [data-testid="stAppViewContainer"] > div,
-[data-testid="block-container"], [data-testid="block-container"] > div { background: #EEF2FA !important; }
-
-[data-testid="stSidebar"],
-[data-testid="stSidebar"] > div { background: #E2E8F4 !important; }
-
-[data-testid="stSidebar"], [data-testid="stSidebar"] *,
-[data-testid="stSidebar"] p, [data-testid="stSidebar"] span,
-[data-testid="stSidebar"] label, [data-testid="stSidebar"] div { color: #1A2A42 !important; -webkit-text-fill-color: #1A2A42 !important; }
-
-[data-testid="stSidebar"] .sb-logo { color: #2E6FD8 !important; -webkit-text-fill-color: #2E6FD8 !important; }
-[data-testid="stSidebar"] .sb-mark { color: #5070A0 !important; -webkit-text-fill-color: #5070A0 !important; }
-[data-testid="stSidebar"] .sb-user { color: #5070A0 !important; -webkit-text-fill-color: #5070A0 !important; }
-[data-testid="stSidebar"] .sb-sep  { background: rgba(46,111,216,0.2) !important; }
-
-[data-testid="stSidebar"] .stRadio > div > label { color: #1A2A42 !important; -webkit-text-fill-color: #1A2A42 !important; background: transparent !important; border: none !important; }
-[data-testid="stSidebar"] .stRadio > div > label:hover { background: rgba(46,111,216,0.1) !important; color: #0F1E36 !important; -webkit-text-fill-color: #0F1E36 !important; }
-[data-testid="stSidebar"] .stRadio > div > label > div:first-child { border-color: #5070A0 !important; }
-
-[data-testid="stSidebar"] [data-testid="stMetric"] { background: #FFFFFF !important; border: 1px solid rgba(46,111,216,0.15) !important; }
-[data-testid="stSidebar"] [data-testid="stMetricValue"] { color: #1A2A42 !important; -webkit-text-fill-color: #1A2A42 !important; }
-[data-testid="stSidebar"] [data-testid="stMetricLabel"] > div { color: #5070A0 !important; -webkit-text-fill-color: #5070A0 !important; }
-
-.page-title { color: #0F1E36 !important; font-weight: 600 !important; }
-.page-sub   { color: #5070A0 !important; }
-.sec-head   { color: #1A2A42 !important; border-color: rgba(46,111,216,0.2) !important; }
-.rule       { background: linear-gradient(90deg, #2E6FD8, rgba(46,111,216,0.15), transparent) !important; }
-h1, h2, h3  { color: #0F1E36 !important; }
-h4, h5, h6  { color: #5070A0 !important; }
-
-p, span, div, label { color: #1A2A42 !important; }
-[data-testid="stWidgetLabel"], [data-testid="stWidgetLabel"] p, [data-testid="stWidgetLabel"] span { color: #5070A0 !important; -webkit-text-fill-color: #5070A0 !important; }
-
-[data-testid="stMetric"] { background: #FFFFFF !important; border: 1px solid rgba(46,111,216,0.15) !important; box-shadow: 0 1px 6px rgba(46,111,216,0.08) !important; }
-[data-testid="stMetricValue"] { color: #1A2A42 !important; -webkit-text-fill-color: #1A2A42 !important; }
-[data-testid="stMetricLabel"] > div { color: #5070A0 !important; -webkit-text-fill-color: #5070A0 !important; }
-
-.stTextInput > div > div > input, .stNumberInput > div > div > input,
-.stTextArea > div > div > textarea, .stDateInput > div > div > input,
-input[type="text"], input[type="number"], input[type="date"], textarea,
-[data-baseweb="input"] input, [data-baseweb="base-input"] input, [data-baseweb="textarea"] textarea {
-    background: #FFFFFF !important; border: 1px solid rgba(46,111,216,0.22) !important;
-    color: #1A2A42 !important; -webkit-text-fill-color: #1A2A42 !important; caret-color: #1A2A42 !important;
-}
-input::placeholder, textarea::placeholder { color: #8AA0C0 !important; -webkit-text-fill-color: #8AA0C0 !important; }
-
-.stSelectbox > div > div, .stSelectbox [data-baseweb="select"] > div, [data-baseweb="select"] > div { background: #FFFFFF !important; border: 1px solid rgba(46,111,216,0.22) !important; }
-[data-baseweb="select"] span, [data-baseweb="select"] div, [class*="singleValue"] { color: #1A2A42 !important; -webkit-text-fill-color: #1A2A42 !important; }
-[data-baseweb="popover"] [data-baseweb="menu"], [data-baseweb="popover"] ul { background: #FFFFFF !important; border: 1px solid rgba(46,111,216,0.18) !important; }
-[data-baseweb="popover"] li, [data-baseweb="popover"] [role="option"] { background: #FFFFFF !important; color: #1A2A42 !important; }
-[data-baseweb="popover"] li:hover, [data-baseweb="popover"] [role="option"]:hover { background: #EDF2FC !important; }
-
-.stButton > button { background: #FFFFFF !important; color: #2E6FD8 !important; border: 1px solid rgba(46,111,216,0.35) !important; }
-.stButton > button:hover { background: #EDF2FC !important; color: #1A56C4 !important; border-color: #2E6FD8 !important; transform: none !important; }
-.stForm button[type="submit"] { background: #2E6FD8 !important; color: #FFFFFF !important; border: none !important; }
-.stForm button[type="submit"]:hover { background: #1A56C4 !important; box-shadow: 0 4px 16px rgba(46,111,216,0.3) !important; }
-.stDownloadButton > button { background: #FFFFFF !important; color: #5070A0 !important; border: 1px solid rgba(46,111,216,0.25) !important; }
-
-.stTabs [data-baseweb="tab-list"] { background: transparent !important; border-bottom: 1px solid rgba(46,111,216,0.18) !important; }
-.stTabs [data-baseweb="tab"] { color: #7090B8 !important; background: transparent !important; }
-.stTabs [aria-selected="true"] { color: #1A2A42 !important; border-bottom-color: #2E6FD8 !important; }
-.stTabs [data-baseweb="tab"]:hover { color: #1A2A42 !important; }
-
-[data-testid="stDataFrame"] th { background: #E8EFF8 !important; color: #5070A0 !important; border-bottom: 1px solid rgba(46,111,216,0.15) !important; }
-[data-testid="stDataFrame"] td { background: #FFFFFF !important; color: #1A2A42 !important; border-bottom: 1px solid rgba(46,111,216,0.06) !important; }
-[data-testid="stDataFrame"] tr:hover td { background: #F0F5FF !important; }
-.stDataFrame { border: 1px solid rgba(46,111,216,0.15) !important; }
-
-.streamlit-expanderHeader { background: #E8EFF8 !important; border: 1px solid rgba(46,111,216,0.18) !important; color: #1A2A42 !important; }
-.streamlit-expanderContent { background: #F2F6FD !important; border: 1px solid rgba(46,111,216,0.12) !important; }
-
-.stRadio > div > label { background: #FFFFFF !important; border: 1px solid rgba(46,111,216,0.22) !important; color: #1A2A42 !important; -webkit-text-fill-color: #1A2A42 !important; }
-.stRadio > div > label:hover { border-color: #2E6FD8 !important; background: #EDF2FC !important; }
-
-.stSuccess { background: rgba(61,154,108,0.1) !important; border: 1px solid rgba(61,154,108,0.3) !important; }
-.stSuccess * { color: #1E6640 !important; }
-.stInfo    { background: rgba(46,111,216,0.08) !important; border: 1px solid rgba(46,111,216,0.25) !important; }
-.stInfo *  { color: #1A3A72 !important; }
-.stWarning { background: rgba(200,160,50,0.1) !important; border: 1px solid rgba(200,160,50,0.3) !important; }
-.stWarning * { color: #7A5800 !important; }
-.stError   { background: rgba(192,80,96,0.1) !important; border: 1px solid rgba(192,80,96,0.3) !important; }
-.stError * { color: #7A1A28 !important; }
-
-[data-testid="stFileUploader"] > div { background: #FFFFFF !important; border: 2px dashed rgba(46,111,216,0.3) !important; color: #1A2A42 !important; }
-[data-testid="stFileUploader"] * { color: #5070A0 !important; }
-
-.stCaption, .stCaption * { color: #5070A0 !important; }
-.badge-gold  { background: rgba(46,111,216,0.12) !important; color: #1A56C4 !important; }
-.badge-green { background: rgba(61,154,108,0.12) !important; color: #1E6640 !important; }
-.badge-red   { background: rgba(192,80,96,0.12)  !important; color: #7A1A28 !important; }
-.badge-muted { background: #DDE5F2 !important; color: #5070A0 !important; }
-.empty       { color: #8AA0C0 !important; }
-.empty-glyph { color: #C0CCE0 !important; }
-.pub-banner  { background: #FFFFFF !important; border-color: rgba(46,111,216,0.2) !important; }
-.pub-banner-title { color: #0F1E36 !important; }
-.pub-banner-sub   { color: #5070A0 !important; }
-.admin-strip-label { color: #8AA0C0 !important; }
-</style>
-"""
-
-def inject_theme():
-    if st.session_state.theme == "light":
-        st.markdown(_LIGHT_CSS, unsafe_allow_html=True)
-
 def get_plot_layout():
-    """Return plotly layout dict adjusted for current theme."""
-    if st.session_state.get("theme") == "light":
-        return dict(
-            paper_bgcolor="rgba(255,255,255,0)",
-            plot_bgcolor="rgba(255,255,255,0)",
-            font=dict(family="Jost", color="#5070A0", size=11),
-            title=dict(font=dict(family="Playfair Display", size=17, color="#1A2A42"), pad=dict(b=12), x=0),
-            xaxis=dict(gridcolor="rgba(46,111,216,0.1)", linecolor="rgba(46,111,216,0.2)", tickfont=dict(size=10, color="#5070A0"), showgrid=True, zeroline=False),
-            yaxis=dict(gridcolor="rgba(46,111,216,0.1)", linecolor="rgba(46,111,216,0.2)", tickfont=dict(size=10, color="#5070A0"), showgrid=True, zeroline=False),
-            legend=dict(bgcolor="rgba(255,255,255,0.9)", bordercolor="rgba(46,111,216,0.15)", borderwidth=1, font=dict(color="#5070A0", size=10)),
-            margin=dict(l=12, r=12, t=44, b=12),
-            colorway=["#2E6FD8","#4D8AE8","#3D9A6C","#8BACD8","#C05060","#1A3D80","#7ADFA0","#4A9AC8"],
-            hoverlabel=dict(bgcolor="rgba(255,255,255,0.97)", bordercolor="rgba(46,111,216,0.3)", font=dict(color="#1A2A42", size=11, family="Jost"), align="left"),
-            bargap=0.35,
-        )
     return PLOT_LAYOUT
 
 PLOT_LAYOUT = dict(
@@ -1265,13 +1117,6 @@ def render_admin_login_strip():
 
 def sidebar():
     with st.sidebar:
-        # ── THEME TOGGLE ──────────────────────────────────────────────────
-        is_light = st.session_state.theme == "light"
-        toggle_label = "🌙 Dark Mode" if is_light else "☀️ Light Mode"
-        if st.button(toggle_label, key="theme_toggle"):
-            st.session_state.theme = "dark" if is_light else "light"
-            st.rerun()
-
         st.markdown("""
         <div class='sb-brand'>
             <div class='sb-logo'>Vinay</div>
@@ -1897,12 +1742,6 @@ def page_inventory():
 def main():
     if "logged_in" not in st.session_state:
         st.session_state.logged_in = False
-    if "theme" not in st.session_state:
-        st.session_state.theme = "dark"
-
-    # Apply light mode CSS overrides if needed
-    inject_theme()
-
     if not st.session_state.logged_in:
         page_add_sale(public=True)
         render_admin_login_strip()
