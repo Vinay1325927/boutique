@@ -6,9 +6,27 @@ import plotly.express as px
 import plotly.graph_objects as go
 from io import BytesIO
 import os
+import time
+import hmac
+import hashlib
+from html import escape as html_escape
+import bcrypt
 from dotenv import load_dotenv
 
 load_dotenv("credentials/.env")
+
+# =====================================================
+# PASSWORD HASH UTILITY
+# Run once in a Python shell to generate your hash:
+#
+#   import bcrypt
+#   h = bcrypt.hashpw(b"your_password_here", bcrypt.gensalt())
+#   print(h.decode())
+#
+# Then set PASSWORD_HASH=<output> in credentials/.env
+# or in your Streamlit secrets.toml as:
+#   PASSWORD_HASH = "<output>"
+# =====================================================
 
 # =====================================================
 # PAGE CONFIG
@@ -553,7 +571,7 @@ input[type="text"], input[type="number"], input[type="date"], textarea {
     border-radius: var(--r) !important;
 }
 
-/* ━━━ RADIO (inline - non-sidebar) ━━━ */
+/* ━━━ RADIO (inline) ━━━ */
 .stRadio > div { gap: 0.5rem !important; flex-direction: row !important; }
 .stRadio > div > label {
     background: var(--navy-3) !important;
@@ -631,6 +649,11 @@ button[data-testid="stNumberInputStepUp"] {
 </style>
 """, unsafe_allow_html=True)
 
+# =====================================================
+# PLOTLY TEMPLATE
+# =====================================================
+
+
 # ── THEME TOGGLE — pure session_state, no JS needed ─────────────────────────
 if "theme" not in st.session_state:
     st.session_state.theme = "dark"
@@ -638,64 +661,33 @@ if "theme" not in st.session_state:
 _LIGHT_CSS = """
 <style>
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-   LIGHT MODE — clean white like packing app
+   LIGHT MODE — clean white
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
-
-/* Page + app background */
 .stApp,
-.stApp > div,
-.main,
-.main > div,
-section.main,
-section.main > div,
-[data-testid="stAppViewContainer"],
-[data-testid="stAppViewContainer"] > div,
-[data-testid="block-container"],
-[data-testid="block-container"] > div { background: #EEF2FA !important; }
+.stApp > div, .main, .main > div, section.main, section.main > div,
+[data-testid="stAppViewContainer"], [data-testid="stAppViewContainer"] > div,
+[data-testid="block-container"], [data-testid="block-container"] > div { background: #EEF2FA !important; }
 
-/* Sidebar */
 [data-testid="stSidebar"],
 [data-testid="stSidebar"] > div { background: #E2E8F4 !important; }
 
-/* ALL text in sidebar — force full dark so nothing is invisible */
-[data-testid="stSidebar"],
-[data-testid="stSidebar"] *,
-[data-testid="stSidebar"] p,
-[data-testid="stSidebar"] span,
-[data-testid="stSidebar"] label,
-[data-testid="stSidebar"] div { color: #1A2A42 !important; -webkit-text-fill-color: #1A2A42 !important; }
+[data-testid="stSidebar"], [data-testid="stSidebar"] *,
+[data-testid="stSidebar"] p, [data-testid="stSidebar"] span,
+[data-testid="stSidebar"] label, [data-testid="stSidebar"] div { color: #1A2A42 !important; -webkit-text-fill-color: #1A2A42 !important; }
 
-/* Sidebar brand */
 [data-testid="stSidebar"] .sb-logo { color: #2E6FD8 !important; -webkit-text-fill-color: #2E6FD8 !important; }
 [data-testid="stSidebar"] .sb-mark { color: #5070A0 !important; -webkit-text-fill-color: #5070A0 !important; }
 [data-testid="stSidebar"] .sb-user { color: #5070A0 !important; -webkit-text-fill-color: #5070A0 !important; }
 [data-testid="stSidebar"] .sb-sep  { background: rgba(46,111,216,0.2) !important; }
 
-/* Sidebar radio nav items */
-[data-testid="stSidebar"] .stRadio > div > label {
-    color: #1A2A42 !important;
-    -webkit-text-fill-color: #1A2A42 !important;
-    background: transparent !important;
-    border: none !important;
-}
-[data-testid="stSidebar"] .stRadio > div > label:hover {
-    background: rgba(46,111,216,0.1) !important;
-    color: #0F1E36 !important;
-    -webkit-text-fill-color: #0F1E36 !important;
-}
-[data-testid="stSidebar"] .stRadio > div > label > div:first-child {
-    border-color: #5070A0 !important;
-}
+[data-testid="stSidebar"] .stRadio > div > label { color: #1A2A42 !important; -webkit-text-fill-color: #1A2A42 !important; background: transparent !important; border: none !important; }
+[data-testid="stSidebar"] .stRadio > div > label:hover { background: rgba(46,111,216,0.1) !important; color: #0F1E36 !important; -webkit-text-fill-color: #0F1E36 !important; }
+[data-testid="stSidebar"] .stRadio > div > label > div:first-child { border-color: #5070A0 !important; }
 
-/* Sidebar metrics */
-[data-testid="stSidebar"] [data-testid="stMetric"] {
-    background: #FFFFFF !important;
-    border: 1px solid rgba(46,111,216,0.15) !important;
-}
+[data-testid="stSidebar"] [data-testid="stMetric"] { background: #FFFFFF !important; border: 1px solid rgba(46,111,216,0.15) !important; }
 [data-testid="stSidebar"] [data-testid="stMetricValue"] { color: #1A2A42 !important; -webkit-text-fill-color: #1A2A42 !important; }
 [data-testid="stSidebar"] [data-testid="stMetricLabel"] > div { color: #5070A0 !important; -webkit-text-fill-color: #5070A0 !important; }
 
-/* Page headings */
 .page-title { color: #0F1E36 !important; font-weight: 600 !important; }
 .page-sub   { color: #5070A0 !important; }
 .sec-head   { color: #1A2A42 !important; border-color: rgba(46,111,216,0.2) !important; }
@@ -703,112 +695,50 @@ section.main > div,
 h1, h2, h3  { color: #0F1E36 !important; }
 h4, h5, h6  { color: #5070A0 !important; }
 
-/* ALL body text */
 p, span, div, label { color: #1A2A42 !important; }
-[data-testid="stWidgetLabel"],
-[data-testid="stWidgetLabel"] p,
-[data-testid="stWidgetLabel"] span {
-    color: #5070A0 !important;
-    -webkit-text-fill-color: #5070A0 !important;
-}
+[data-testid="stWidgetLabel"], [data-testid="stWidgetLabel"] p, [data-testid="stWidgetLabel"] span { color: #5070A0 !important; -webkit-text-fill-color: #5070A0 !important; }
 
-/* Metrics */
-[data-testid="stMetric"] {
-    background: #FFFFFF !important;
-    border: 1px solid rgba(46,111,216,0.15) !important;
-    box-shadow: 0 1px 6px rgba(46,111,216,0.08) !important;
-}
+[data-testid="stMetric"] { background: #FFFFFF !important; border: 1px solid rgba(46,111,216,0.15) !important; box-shadow: 0 1px 6px rgba(46,111,216,0.08) !important; }
 [data-testid="stMetricValue"] { color: #1A2A42 !important; -webkit-text-fill-color: #1A2A42 !important; }
 [data-testid="stMetricLabel"] > div { color: #5070A0 !important; -webkit-text-fill-color: #5070A0 !important; }
 
-/* Inputs */
-.stTextInput > div > div > input,
-.stNumberInput > div > div > input,
-.stTextArea > div > div > textarea,
-.stDateInput > div > div > input,
+.stTextInput > div > div > input, .stNumberInput > div > div > input,
+.stTextArea > div > div > textarea, .stDateInput > div > div > input,
 input[type="text"], input[type="number"], input[type="date"], textarea,
-[data-baseweb="input"] input,
-[data-baseweb="base-input"] input,
-[data-baseweb="textarea"] textarea {
-    background: #FFFFFF !important;
-    border: 1px solid rgba(46,111,216,0.22) !important;
-    color: #1A2A42 !important;
-    -webkit-text-fill-color: #1A2A42 !important;
-    caret-color: #1A2A42 !important;
+[data-baseweb="input"] input, [data-baseweb="base-input"] input, [data-baseweb="textarea"] textarea {
+    background: #FFFFFF !important; border: 1px solid rgba(46,111,216,0.22) !important;
+    color: #1A2A42 !important; -webkit-text-fill-color: #1A2A42 !important; caret-color: #1A2A42 !important;
 }
 input::placeholder, textarea::placeholder { color: #8AA0C0 !important; -webkit-text-fill-color: #8AA0C0 !important; }
 
-/* Selectbox */
-.stSelectbox > div > div,
-.stSelectbox [data-baseweb="select"] > div,
-[data-baseweb="select"] > div {
-    background: #FFFFFF !important;
-    border: 1px solid rgba(46,111,216,0.22) !important;
-}
-[data-baseweb="select"] span,
-[data-baseweb="select"] div,
-[class*="singleValue"] { color: #1A2A42 !important; -webkit-text-fill-color: #1A2A42 !important; }
-[data-baseweb="popover"] [data-baseweb="menu"],
-[data-baseweb="popover"] ul { background: #FFFFFF !important; border: 1px solid rgba(46,111,216,0.18) !important; }
-[data-baseweb="popover"] li,
-[data-baseweb="popover"] [role="option"] { background: #FFFFFF !important; color: #1A2A42 !important; }
-[data-baseweb="popover"] li:hover,
-[data-baseweb="popover"] [role="option"]:hover { background: #EDF2FC !important; }
+.stSelectbox > div > div, .stSelectbox [data-baseweb="select"] > div, [data-baseweb="select"] > div { background: #FFFFFF !important; border: 1px solid rgba(46,111,216,0.22) !important; }
+[data-baseweb="select"] span, [data-baseweb="select"] div, [class*="singleValue"] { color: #1A2A42 !important; -webkit-text-fill-color: #1A2A42 !important; }
+[data-baseweb="popover"] [data-baseweb="menu"], [data-baseweb="popover"] ul { background: #FFFFFF !important; border: 1px solid rgba(46,111,216,0.18) !important; }
+[data-baseweb="popover"] li, [data-baseweb="popover"] [role="option"] { background: #FFFFFF !important; color: #1A2A42 !important; }
+[data-baseweb="popover"] li:hover, [data-baseweb="popover"] [role="option"]:hover { background: #EDF2FC !important; }
 
-/* Buttons */
-.stButton > button {
-    background: #FFFFFF !important;
-    color: #2E6FD8 !important;
-    border: 1px solid rgba(46,111,216,0.35) !important;
-}
-.stButton > button:hover {
-    background: #EDF2FC !important;
-    color: #1A56C4 !important;
-    border-color: #2E6FD8 !important;
-    transform: none !important;
-}
-.stForm button[type="submit"] {
-    background: #2E6FD8 !important;
-    color: #FFFFFF !important;
-    border: none !important;
-}
+.stButton > button { background: #FFFFFF !important; color: #2E6FD8 !important; border: 1px solid rgba(46,111,216,0.35) !important; }
+.stButton > button:hover { background: #EDF2FC !important; color: #1A56C4 !important; border-color: #2E6FD8 !important; transform: none !important; }
+.stForm button[type="submit"] { background: #2E6FD8 !important; color: #FFFFFF !important; border: none !important; }
 .stForm button[type="submit"]:hover { background: #1A56C4 !important; box-shadow: 0 4px 16px rgba(46,111,216,0.3) !important; }
-.stDownloadButton > button {
-    background: #FFFFFF !important;
-    color: #5070A0 !important;
-    border: 1px solid rgba(46,111,216,0.25) !important;
-}
+.stDownloadButton > button { background: #FFFFFF !important; color: #5070A0 !important; border: 1px solid rgba(46,111,216,0.25) !important; }
 
-/* Tabs */
 .stTabs [data-baseweb="tab-list"] { background: transparent !important; border-bottom: 1px solid rgba(46,111,216,0.18) !important; }
 .stTabs [data-baseweb="tab"] { color: #7090B8 !important; background: transparent !important; }
 .stTabs [aria-selected="true"] { color: #1A2A42 !important; border-bottom-color: #2E6FD8 !important; }
 .stTabs [data-baseweb="tab"]:hover { color: #1A2A42 !important; }
 
-/* Tables */
 [data-testid="stDataFrame"] th { background: #E8EFF8 !important; color: #5070A0 !important; border-bottom: 1px solid rgba(46,111,216,0.15) !important; }
 [data-testid="stDataFrame"] td { background: #FFFFFF !important; color: #1A2A42 !important; border-bottom: 1px solid rgba(46,111,216,0.06) !important; }
 [data-testid="stDataFrame"] tr:hover td { background: #F0F5FF !important; }
 .stDataFrame { border: 1px solid rgba(46,111,216,0.15) !important; }
 
-/* Expanders */
-.streamlit-expanderHeader {
-    background: #E8EFF8 !important;
-    border: 1px solid rgba(46,111,216,0.18) !important;
-    color: #1A2A42 !important;
-}
+.streamlit-expanderHeader { background: #E8EFF8 !important; border: 1px solid rgba(46,111,216,0.18) !important; color: #1A2A42 !important; }
 .streamlit-expanderContent { background: #F2F6FD !important; border: 1px solid rgba(46,111,216,0.12) !important; }
 
-/* Inline radios (non-sidebar) */
-.stRadio > div > label {
-    background: #FFFFFF !important;
-    border: 1px solid rgba(46,111,216,0.22) !important;
-    color: #1A2A42 !important;
-    -webkit-text-fill-color: #1A2A42 !important;
-}
+.stRadio > div > label { background: #FFFFFF !important; border: 1px solid rgba(46,111,216,0.22) !important; color: #1A2A42 !important; -webkit-text-fill-color: #1A2A42 !important; }
 .stRadio > div > label:hover { border-color: #2E6FD8 !important; background: #EDF2FC !important; }
 
-/* Alerts */
 .stSuccess { background: rgba(61,154,108,0.1) !important; border: 1px solid rgba(61,154,108,0.3) !important; }
 .stSuccess * { color: #1E6640 !important; }
 .stInfo    { background: rgba(46,111,216,0.08) !important; border: 1px solid rgba(46,111,216,0.25) !important; }
@@ -818,25 +748,17 @@ input::placeholder, textarea::placeholder { color: #8AA0C0 !important; -webkit-t
 .stError   { background: rgba(192,80,96,0.1) !important; border: 1px solid rgba(192,80,96,0.3) !important; }
 .stError * { color: #7A1A28 !important; }
 
-/* File uploader */
-[data-testid="stFileUploader"] > div {
-    background: #FFFFFF !important;
-    border: 2px dashed rgba(46,111,216,0.3) !important;
-    color: #1A2A42 !important;
-}
+[data-testid="stFileUploader"] > div { background: #FFFFFF !important; border: 2px dashed rgba(46,111,216,0.3) !important; color: #1A2A42 !important; }
 [data-testid="stFileUploader"] * { color: #5070A0 !important; }
 
-/* Caption / small text */
 .stCaption, .stCaption * { color: #5070A0 !important; }
-
-/* Misc */
-.badge-gold   { background: rgba(46,111,216,0.12) !important; color: #1A56C4 !important; }
-.badge-green  { background: rgba(61,154,108,0.12) !important; color: #1E6640 !important; }
-.badge-red    { background: rgba(192,80,96,0.12)  !important; color: #7A1A28 !important; }
-.badge-muted  { background: #DDE5F2 !important; color: #5070A0 !important; }
-.empty        { color: #8AA0C0 !important; }
-.empty-glyph  { color: #C0CCE0 !important; }
-.pub-banner   { background: #FFFFFF !important; border-color: rgba(46,111,216,0.2) !important; }
+.badge-gold  { background: rgba(46,111,216,0.12) !important; color: #1A56C4 !important; }
+.badge-green { background: rgba(61,154,108,0.12) !important; color: #1E6640 !important; }
+.badge-red   { background: rgba(192,80,96,0.12)  !important; color: #7A1A28 !important; }
+.badge-muted { background: #DDE5F2 !important; color: #5070A0 !important; }
+.empty       { color: #8AA0C0 !important; }
+.empty-glyph { color: #C0CCE0 !important; }
+.pub-banner  { background: #FFFFFF !important; border-color: rgba(46,111,216,0.2) !important; }
 .pub-banner-title { color: #0F1E36 !important; }
 .pub-banner-sub   { color: #5070A0 !important; }
 .admin-strip-label { color: #8AA0C0 !important; }
@@ -1026,11 +948,11 @@ def get_existing_customers_with_phone():
 # =====================================================
 
 def page_header(title, sub):
-    st.markdown(f"<div class='page-title'>{title}</div>", unsafe_allow_html=True)
-    st.markdown(f"<div class='page-sub'>{sub}</div>", unsafe_allow_html=True)
+    st.markdown(f"<div class='page-title'>{html_escape(title)}</div>", unsafe_allow_html=True)
+    st.markdown(f"<div class='page-sub'>{html_escape(sub)}</div>", unsafe_allow_html=True)
 
 def sec(label):
-    st.markdown(f"<div class='sec-head'>{label}</div>", unsafe_allow_html=True)
+    st.markdown(f"<div class='sec-head'>{html_escape(label)}</div>", unsafe_allow_html=True)
 
 def rule():
     st.markdown("<hr class='rule'>", unsafe_allow_html=True)
@@ -1136,7 +1058,31 @@ def page_add_sale(public=False):
         submitted = st.form_submit_button("Save Sale", use_container_width=True)
 
         if submitted:
+            # ── Public form rate limiting ────────────────────────────────
+            if public:
+                now = time.time()
+                window_start = st.session_state.get("pub_window_start", now)
+                pub_count    = st.session_state.get("pub_submit_count", 0)
+                # Reset counter every 60 seconds
+                if now - window_start > 60:
+                    st.session_state.pub_window_start  = now
+                    st.session_state.pub_submit_count  = 0
+                    pub_count = 0
+                pub_count += 1
+                st.session_state.pub_submit_count = pub_count
+                if pub_count > 5:
+                    st.error("Too many submissions. Please wait a minute before trying again.")
+                    st.stop()
+
+            # ── Input length guards ──────────────────────────────────────
+            MAX = {"name": 120, "phone": 20, "vendor": 100, "desc": 500, "notes": 500}
             errs = []
+            if len(cname) > MAX["name"]:   errs.append(f"Customer name must be under {MAX['name']} characters.")
+            if len(cphone) > MAX["phone"]:  errs.append(f"Phone number must be under {MAX['phone']} characters.")
+            if len(vend) > MAX["vendor"]:   errs.append(f"Vendor name must be under {MAX['vendor']} characters.")
+            if len(desc) > MAX["desc"]:     errs.append(f"Description must be under {MAX['desc']} characters.")
+            if len(notes) > MAX["notes"]:   errs.append(f"Notes must be under {MAX['notes']} characters.")
+
             if not cname.strip():  errs.append("Customer name is required.")
             if buy  <= 0:          errs.append("Buying price must be > 0.")
             if sell <= 0:          errs.append("Selling price must be > 0.")
@@ -1149,12 +1095,12 @@ def page_add_sale(public=False):
             else:
                 get_col().insert_one({
                     "id":                  get_next_id(),
-                    "customer_name":       cname.strip(),
-                    "customer_phone":      cphone.strip(),
+                    "customer_name":       cname.strip()[:120],
+                    "customer_phone":      cphone.strip()[:20],
                     "sale_date":           str(sdate),
-                    "vendor":              vend.strip(),
+                    "vendor":              vend.strip()[:100],
                     "product_category":    cat,
-                    "product_description": desc.strip(),
+                    "product_description": desc.strip()[:500],
                     "quantity":            qty,
                     "buying_price":        round(buy, 2),
                     "selling_price":       round(sell, 2),
@@ -1163,13 +1109,103 @@ def page_add_sale(public=False):
                     "payment_received":    1 if pending_amt == 0 else 0,
                     "delay_status":        0,
                     "payment_method":      pm,
-                    "notes":               notes.strip(),
+                    "notes":               notes.strip()[:500],
                     "created_at":          str(datetime.now()),
                 })
                 invalidate_cache()
                 st.success(f"✓ Sale recorded for {cname.strip()}.")
                 st.balloons()
                 st.rerun()
+
+# =====================================================
+# AUTH HELPERS
+# =====================================================
+
+_MAX_ATTEMPTS   = 5
+_LOCKOUT_SECS   = 300   # 5-minute lockout after max attempts
+_BACKOFF_BASE   = 1.5   # seconds — doubles each attempt after 1st failure
+
+def _get_stored_hash() -> bytes | None:
+    """
+    Return the bcrypt hash of the admin password.
+
+    Priority:
+      1. st.secrets["PASSWORD_HASH"]  — a bcrypt hash (preferred for production)
+      2. st.secrets["PASSWORD"]       — plain text, hashed on the fly (migration path)
+      3. env var PASSWORD_HASH        — bcrypt hash
+      4. env var PASSWORD             — plain text, hashed on the fly
+
+    If none of these are set the function returns None and login is blocked.
+    """
+    try:
+        secrets = st.secrets
+    except Exception:
+        secrets = {}
+
+    # 1. Pre-hashed secret
+    h = secrets.get("PASSWORD_HASH") or os.getenv("PASSWORD_HASH", "")
+    if h:
+        return h.encode() if isinstance(h, str) else h
+
+    # 2. Plain-text secret — hash on the fly (one-time cost per cold start)
+    p = secrets.get("PASSWORD") or os.getenv("PASSWORD", "")
+    if p:
+        return bcrypt.hashpw(p.encode(), bcrypt.gensalt())
+
+    # Nothing configured — fail closed
+    return None
+
+
+def _get_username() -> str | None:
+    try:
+        u = st.secrets.get("USERNAME") or os.getenv("USERNAME", "")
+    except Exception:
+        u = os.getenv("USERNAME", "")
+    return u.strip() or None
+
+
+def _check_lockout() -> tuple[bool, int]:
+    """Returns (is_locked, seconds_remaining)."""
+    attempts  = st.session_state.get("login_attempts", 0)
+    lock_time = st.session_state.get("login_lock_until", 0)
+    now       = time.time()
+    if lock_time and now < lock_time:
+        return True, int(lock_time - now)
+    if lock_time and now >= lock_time:
+        # Reset after lockout expires
+        st.session_state.login_attempts   = 0
+        st.session_state.login_lock_until = 0
+    return False, 0
+
+
+def _record_failure():
+    attempts = st.session_state.get("login_attempts", 0) + 1
+    st.session_state.login_attempts = attempts
+    if attempts >= _MAX_ATTEMPTS:
+        st.session_state.login_lock_until = time.time() + _LOCKOUT_SECS
+    else:
+        # Progressive back-off delay (no await needed — this is server-side Streamlit)
+        delay = _BACKOFF_BASE * (2 ** (attempts - 1))
+        time.sleep(min(delay, 30))
+
+
+def _verify_credentials(username: str, password: str) -> bool:
+    stored_user = _get_username()
+    stored_hash = _get_stored_hash()
+
+    if stored_user is None or stored_hash is None:
+        return False
+
+    # Constant-time username compare
+    user_ok = hmac.compare_digest(username.encode(), stored_user.encode())
+    # bcrypt compare (constant-time internally)
+    try:
+        pass_ok = bcrypt.checkpw(password.encode(), stored_hash)
+    except Exception:
+        pass_ok = False
+
+    return user_ok and pass_ok
+
 
 # =====================================================
 # ADMIN LOGIN
@@ -1179,26 +1215,47 @@ def render_admin_login_strip():
     st.markdown("<div class='admin-strip'>", unsafe_allow_html=True)
     st.markdown("<div class='admin-strip-label'>◆ Admin Access</div>", unsafe_allow_html=True)
 
+    # Credential config check (fail closed if nothing set)
+    if _get_stored_hash() is None or _get_username() is None:
+        with st.expander("Sign in to Admin Dashboard", expanded=False):
+            st.error(
+                "Admin credentials are not configured. "
+                "Set USERNAME and PASSWORD (or PASSWORD_HASH) in st.secrets or environment variables."
+            )
+        st.markdown("</div>", unsafe_allow_html=True)
+        return
+
     with st.expander("Sign in to Admin Dashboard", expanded=False):
+        locked, secs_left = _check_lockout()
+        if locked:
+            st.error(f"Too many failed attempts. Try again in {secs_left // 60}m {secs_left % 60}s.")
+            st.markdown("</div>", unsafe_allow_html=True)
+            return
+
+        attempts_left = _MAX_ATTEMPTS - st.session_state.get("login_attempts", 0)
+        if attempts_left < _MAX_ATTEMPTS:
+            st.warning(f"{attempts_left} attempt(s) remaining before lockout.")
+
         with st.form("admin_login_form"):
-            u = st.text_input("Username", placeholder="username", key="admin_u")
-            p = st.text_input("Password", type="password", placeholder="••••••••", key="admin_p")
+            u = st.text_input("Username", placeholder="username",   key="admin_u")
+            p = st.text_input("Password", type="password",
+                              placeholder="••••••••",                key="admin_p")
             submitted = st.form_submit_button("Sign In", use_container_width=True)
 
         if submitted:
-            try:
-                cu = st.secrets.get("USERNAME", os.getenv("USERNAME", "admin"))
-                cp = st.secrets.get("PASSWORD", os.getenv("PASSWORD", "1234"))
-            except Exception:
-                cu = os.getenv("USERNAME", "admin")
-                cp = os.getenv("PASSWORD", "1234")
-
-            if u == cu and p == cp:
-                st.session_state.logged_in = True
-                st.session_state.username  = u
+            if _verify_credentials(u, p):
+                st.session_state.logged_in      = True
+                st.session_state.username        = u
+                st.session_state.login_attempts  = 0
+                st.session_state.login_lock_until = 0
                 st.rerun()
             else:
-                st.error("Invalid credentials.")
+                _record_failure()
+                locked2, secs_left2 = _check_lockout()
+                if locked2:
+                    st.error(f"Account locked for {secs_left2 // 60}m {secs_left2 % 60}s.")
+                else:
+                    st.error("Invalid credentials.")
 
     st.markdown("</div>", unsafe_allow_html=True)
 
@@ -1251,83 +1308,10 @@ def sidebar():
             f"<div class='sb-user'>◆ {st.session_state.get('username','Admin').title()}</div>",
             unsafe_allow_html=True,
         )
-
-        # ── BACKUP & RESTORE ──────────────────────────────────────────────
-        st.markdown("<div class='sb-sep'></div>", unsafe_allow_html=True)
-        st.markdown("**💾 Backup & Restore**")
-
-        # Download checkpoint — export all sales as Excel
-        df_all = fetch_all()
-        if not df_all.empty:
-            excel_bytes = to_excel(df_all)
-            st.download_button(
-                label="⬇️ Download checkpoint",
-                data=excel_bytes,
-                file_name=f"boutique_backup_{date.today()}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True,
-                key="backup_download",
-            )
-        else:
-            st.button("⬇️ Download checkpoint", disabled=True, use_container_width=True, key="backup_download_empty")
-
-        # Restore from checkpoint
-        st.markdown("⬆️ **Restore from checkpoint**")
-        xfile = st.file_uploader("", type=["xlsx"], key="excel_upload", label_visibility="collapsed")
-        if xfile is not None:
-            try:
-                xdf = pd.read_excel(xfile)
-                col_map = {
-                    "Id": "id", "Customer Name": "customer_name",
-                    "Customer Phone": "customer_phone", "Sale Date": "sale_date",
-                    "Product Category": "product_category",
-                    "Product Description": "product_description",
-                    "Vendor": "vendor", "Buying Price": "buying_price",
-                    "Selling Price": "selling_price", "Profit": "profit",
-                    "Profit Margin %": "margin", "Amount Paid": "amount_paid",
-                    "Pending Amount": "pending_amount",
-                    "Payment Status": "payment_status", "Delayed": "delay_status",
-                    "Payment Method": "payment_method", "Notes": "notes",
-                    "Created At": "created_at",
-                }
-                xdf.rename(columns=col_map, inplace=True)
-                st.caption(f"Found **{len(xdf)}** rows")
-                if st.button("Import & Deduplicate", use_container_width=True, key="import_btn"):
-                    db_col = get_col()
-                    existing_ids = set(
-                        doc["id"] for doc in db_col.find({}, {"_id": 0, "id": 1}) if "id" in doc
-                    )
-                    inserted, skipped = 0, 0
-                    for _, row in xdf.iterrows():
-                        rid = row.get("id")
-                        if pd.notna(rid) and int(rid) in existing_ids:
-                            skipped += 1
-                            continue
-                        rec = {k: (None if pd.isna(v) else v) for k, v in row.items()}
-                        if "id" in rec and rec["id"] is not None:
-                            rec["id"] = int(rec["id"])
-                        ds = rec.get("delay_status", "No")
-                        rec["delay_status"] = 1 if str(ds).strip().lower() in ("yes","1","true") else 0
-                        ps = rec.get("payment_status", "Pending")
-                        rec["payment_received"] = 1 if str(ps).strip().lower() in ("received","paid","1") else 0
-                        for f in ["buying_price","selling_price","amount_paid","pending_amount"]:
-                            try: rec[f] = float(rec.get(f) or 0)
-                            except: rec[f] = 0.0
-                        sd = rec.get("sale_date")
-                        if sd is not None and not isinstance(sd, str):
-                            try: rec["sale_date"] = str(pd.Timestamp(sd).date())
-                            except: rec["sale_date"] = str(sd)
-                        db_col.insert_one(rec)
-                        if rid is not None:
-                            existing_ids.add(int(rid))
-                        inserted += 1
-                    invalidate_cache()
-                    st.success(f"✓ {inserted} imported, {skipped} duplicates skipped.")
-                    st.rerun()
-            except Exception as ex:
-                st.error(f"Error: {ex}")
-
     return nav
+
+# =====================================================
+# ADMIN PAGES
 # =====================================================
 
 def page_dashboard():
