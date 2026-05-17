@@ -1011,7 +1011,7 @@ def to_excel(df: pd.DataFrame) -> BytesIO:
         ex.to_excel(w, index=False)
         ws = w.sheets["Sheet1"]
         for i, col in enumerate(ex.columns, 1):
-            ml = max(ex.iloc[:, i-1].astype(str).map(len).max(), len(col)) + 4
+            ml = max(ex.iloc[:, i-1].astype(str).str.len().max(), len(col)) + 4
             ws.column_dimensions[ws.cell(1, i).column_letter].width = min(ml, 45)
         from openpyxl.styles import Font, PatternFill, Alignment
         blue_fill = PatternFill("solid", fgColor="2E6FD8")
