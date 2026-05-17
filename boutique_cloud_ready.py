@@ -55,80 +55,24 @@ st.markdown("""
     --shadow-lg:    0 8px 48px rgba(0,0,0,0.65);
 }
 
-/* ━━━ LIGHT MODE OVERRIDES ━━━ */
-body[data-theme="light"] {
-    --navy-1:       #F4F7FC;
-    --navy-2:       #EAEFF8;
-    --navy-3:       #FFFFFF;
-    --navy-4:       #DDE5F2;
-    --navy-5:       #C8D4E8;
-    --blue:         #2E6FD8;
-    --blue-soft:    #1A56C4;
-    --blue-pale:    #1A3D80;
-    --cream:        #1A2A42;
-    --cream-dim:    #2C4268;
-    --muted:        #4A6080;
-    --dim:          #7090B8;
-    --border:       rgba(46,111,216,0.22);
-    --border-hover: rgba(46,111,216,0.5);
-    --shadow:       0 2px 24px rgba(0,0,0,0.12);
+/* ━━━ SIDEBAR THEME TOGGLE ━━━ */
+[data-testid="stSidebar"] > div:first-child > div:first-child .stButton > button {
+    background: transparent !important;
+    border: 1px solid var(--border) !important;
+    color: var(--muted) !important;
+    font-size: 0.7rem !important;
+    padding: 0.3rem 0.8rem !important;
+    letter-spacing: 0.08em !important;
+    width: auto !important;
+    float: right;
+    margin-bottom: 0.5rem;
 }
-body[data-theme="light"] .stApp {
-    background: #F4F7FC !important;
-    background-image:
-        radial-gradient(ellipse 900px 600px at 0% 0%, rgba(46,111,216,0.05) 0%, transparent 70%),
-        radial-gradient(ellipse 700px 500px at 100% 100%, rgba(46,111,216,0.04) 0%, transparent 70%) !important;
+[data-testid="stSidebar"] > div:first-child > div:first-child .stButton > button:hover {
+    border-color: var(--border-hover) !important;
+    color: var(--cream) !important;
+    transform: none !important;
+    background: rgba(46,111,216,0.1) !important;
 }
-body[data-theme="light"] html, body[data-theme="light"] [class*="css"] {
-    background: #F4F7FC !important;
-    color: #1A2A42 !important;
-}
-body[data-theme="light"] input:not([type="radio"]):not([type="checkbox"]),
-body[data-theme="light"] textarea,
-body[data-theme="light"] [data-baseweb="input"] input,
-body[data-theme="light"] [data-baseweb="base-input"] input,
-body[data-theme="light"] [data-baseweb="textarea"] textarea {
-    color: #1A2A42 !important;
-    -webkit-text-fill-color: #1A2A42 !important;
-    caret-color: #1A2A42 !important;
-    background-color: #FFFFFF !important;
-}
-body[data-theme="light"] [data-testid="stSidebar"] {
-    background: #EAEFF8 !important;
-}
-body[data-theme="light"] [data-testid="stSidebar"] * { color: #1A2A42 !important; }
-body[data-theme="light"] h1, body[data-theme="light"] h2, body[data-theme="light"] h3 {
-    color: #1A2A42 !important;
-}
-
-/* ━━━ THEME TOGGLE BUTTON ━━━ */
-#theme-toggle-btn {
-    position: fixed;
-    top: 14px;
-    right: 18px;
-    z-index: 9999;
-    background: var(--navy-3);
-    border: 1px solid var(--border);
-    border-radius: 50px;
-    padding: 6px 14px;
-    cursor: pointer;
-    font-family: 'Jost', sans-serif;
-    font-size: 0.75rem;
-    font-weight: 500;
-    letter-spacing: 0.08em;
-    color: var(--muted);
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    transition: all 0.25s ease;
-    box-shadow: var(--shadow);
-}
-#theme-toggle-btn:hover {
-    border-color: var(--border-hover);
-    color: var(--cream);
-    transform: translateY(-1px);
-}
-#theme-toggle-icon { font-size: 0.9rem; }
 
 html, body, [class*="css"] {
     font-family: 'Jost', sans-serif !important;
@@ -687,45 +631,128 @@ button[data-testid="stNumberInputStepUp"] {
 </style>
 """, unsafe_allow_html=True)
 
-# ── THEME TOGGLE BUTTON ─────────────────────────────────────────────────────
-st.markdown("""
-<button id="theme-toggle-btn" onclick="toggleTheme()">
-    <span id="theme-toggle-icon">☀️</span>
-    <span id="theme-toggle-label">Light Mode</span>
-</button>
-<script>
-(function() {
-    var saved = localStorage.getItem('vinay_theme') || 'dark';
-    applyTheme(saved);
+# ── THEME TOGGLE — pure session_state, no JS needed ─────────────────────────
+if "theme" not in st.session_state:
+    st.session_state.theme = "dark"
 
-    function applyTheme(t) {
-        document.body.setAttribute('data-theme', t);
-        var ico = document.getElementById('theme-toggle-icon');
-        var lbl = document.getElementById('theme-toggle-label');
-        if (t === 'light') {
-            if(ico) ico.textContent = '🌙';
-            if(lbl) lbl.textContent = 'Dark Mode';
-        } else {
-            if(ico) ico.textContent = '☀️';
-            if(lbl) lbl.textContent = 'Light Mode';
-        }
-        localStorage.setItem('vinay_theme', t);
-    }
+_LIGHT_CSS = """
+<style>
+/* ━━━ LIGHT MODE — full override ━━━ */
+html, body, [class*="css"], .stApp, section, div {
+    background-color: #F0F4FB !important;
+    color: #1A2A42 !important;
+}
+.stApp {
+    background: #F0F4FB !important;
+    background-image: none !important;
+}
+[data-testid="stSidebar"] {
+    background: #E2EAF6 !important;
+    border-right: 1px solid rgba(46,111,216,0.18) !important;
+}
+[data-testid="stSidebar"] * { color: #1A2A42 !important; }
+[data-testid="stSidebar"] .stRadio > div > label { color: #4A6080 !important; background: transparent !important; }
+[data-testid="stSidebar"] .stRadio > div > label:hover { background: rgba(46,111,216,0.08) !important; color: #1A2A42 !important; }
+.sb-logo { color: #2E6FD8 !important; }
+.sb-mark, .sb-user { color: #7090B8 !important; }
+.sb-sep { background: rgba(46,111,216,0.18) !important; }
+.page-title { color: #1A2A42 !important; }
+.page-sub { color: #7090B8 !important; }
+.sec-head { color: #1A2A42 !important; border-color: rgba(46,111,216,0.22) !important; }
+.rule { background: linear-gradient(90deg, #2E6FD8 0%, rgba(46,111,216,0.2) 60%, transparent 100%) !important; }
+h1,h2,h3 { color: #1A2A42 !important; }
+h4,h5,h6 { color: #4A6080 !important; }
+[data-testid="stMetric"] {
+    background: #FFFFFF !important;
+    border: 1px solid rgba(46,111,216,0.18) !important;
+    box-shadow: 0 1px 8px rgba(0,0,0,0.06) !important;
+}
+[data-testid="stMetricValue"] { color: #1A2A42 !important; }
+[data-testid="stMetricLabel"] > div { color: #4A6080 !important; }
+.stTextInput > div > div > input,
+.stNumberInput > div > div > input,
+.stTextArea > div > div > textarea,
+.stDateInput > div > div > input,
+input[type="text"], input[type="number"], input[type="date"], textarea {
+    background: #FFFFFF !important;
+    border: 1px solid rgba(46,111,216,0.25) !important;
+    color: #1A2A42 !important;
+    -webkit-text-fill-color: #1A2A42 !important;
+}
+.stSelectbox > div > div,
+.stSelectbox [data-baseweb="select"] > div {
+    background: #FFFFFF !important;
+    border: 1px solid rgba(46,111,216,0.25) !important;
+    color: #1A2A42 !important;
+}
+.stSelectbox [data-baseweb="select"] span,
+.stSelectbox [data-baseweb="select"] div { color: #1A2A42 !important; }
+[data-baseweb="popover"] [data-baseweb="menu"], [data-baseweb="popover"] ul {
+    background: #FFFFFF !important; border: 1px solid rgba(46,111,216,0.2) !important;
+}
+[data-baseweb="popover"] li, [data-baseweb="popover"] [role="option"] {
+    background: #FFFFFF !important; color: #1A2A42 !important;
+}
+[data-baseweb="popover"] li:hover, [data-baseweb="popover"] [role="option"]:hover {
+    background: #EFF3FA !important;
+}
+.stButton > button {
+    background: transparent !important;
+    color: #2E6FD8 !important;
+    border: 1px solid rgba(46,111,216,0.4) !important;
+}
+.stButton > button:hover {
+    background: rgba(46,111,216,0.08) !important;
+    color: #1A56C4 !important;
+}
+.stForm button[type="submit"] {
+    background: #2E6FD8 !important;
+    color: #FFFFFF !important;
+}
+.stDownloadButton > button {
+    color: #4A6080 !important;
+    border: 1px solid rgba(46,111,216,0.25) !important;
+}
+.stTabs [data-baseweb="tab-list"] { border-bottom: 1px solid rgba(46,111,216,0.2) !important; }
+.stTabs [data-baseweb="tab"] { color: #7090B8 !important; }
+.stTabs [aria-selected="true"] { color: #1A2A42 !important; border-bottom-color: #2E6FD8 !important; }
+[data-testid="stDataFrame"] th { background: #EFF3FA !important; color: #4A6080 !important; border-bottom: 1px solid rgba(46,111,216,0.15) !important; }
+[data-testid="stDataFrame"] td { background: #FFFFFF !important; color: #1A2A42 !important; border-bottom: 1px solid rgba(46,111,216,0.06) !important; }
+[data-testid="stDataFrame"] tr:hover td { background: #F5F8FF !important; }
+.stDataFrame { border: 1px solid rgba(46,111,216,0.18) !important; }
+.streamlit-expanderHeader {
+    background: #EFF3FA !important;
+    border: 1px solid rgba(46,111,216,0.18) !important;
+    color: #4A6080 !important;
+}
+.streamlit-expanderContent {
+    background: #F5F8FF !important;
+    border: 1px solid rgba(46,111,216,0.12) !important;
+}
+.stRadio > div > label {
+    background: #FFFFFF !important;
+    border: 1px solid rgba(46,111,216,0.22) !important;
+    color: #4A6080 !important;
+}
+.stRadio > div > label:hover { border-color: rgba(46,111,216,0.5) !important; color: #1A2A42 !important; }
+.stSuccess { background: rgba(61,154,108,0.1) !important; border: 1px solid rgba(61,154,108,0.3) !important; color: #2A7A50 !important; }
+.stInfo    { background: rgba(46,111,216,0.08) !important; border: 1px solid rgba(46,111,216,0.25) !important; }
+.stWarning { background: rgba(200,160,50,0.08) !important; border: 1px solid rgba(200,160,50,0.25) !important; }
+.stError   { background: rgba(192,80,96,0.08)  !important; border: 1px solid rgba(192,80,96,0.22)  !important; }
+[data-testid="stWidgetLabel"], [data-testid="stWidgetLabel"] p,
+[data-testid="stWidgetLabel"] span { color: #4A6080 !important; -webkit-text-fill-color: #4A6080 !important; }
+input::placeholder, textarea::placeholder { color: #9AADC8 !important; -webkit-text-fill-color: #9AADC8 !important; }
+.badge-gold  { background: rgba(46,111,216,0.12); color: #1A56C4; }
+.badge-green { background: rgba(61,154,108,0.12); color: #2A7A50; }
+.badge-muted { background: #DDE5F2; color: #4A6080; }
+.empty { color: #9AADC8 !important; }
+.admin-strip-label { color: #C8D4E8 !important; }
+</style>
+"""
 
-    window.toggleTheme = function() {
-        var cur = document.body.getAttribute('data-theme') || 'dark';
-        applyTheme(cur === 'dark' ? 'light' : 'dark');
-    };
-
-    var obs = new MutationObserver(function() {
-        var t = localStorage.getItem('vinay_theme') || 'dark';
-        if (document.body.getAttribute('data-theme') !== t) applyTheme(t);
-    });
-    obs.observe(document.body, { childList: true, subtree: false });
-})();
-</script>
-""", unsafe_allow_html=True)
-# =====================================================
+def inject_theme():
+    if st.session_state.theme == "light":
+        st.markdown(_LIGHT_CSS, unsafe_allow_html=True)
 
 PLOT_LAYOUT = dict(
     paper_bgcolor="rgba(0,0,0,0)",
@@ -1070,6 +1097,13 @@ def render_admin_login_strip():
 
 def sidebar():
     with st.sidebar:
+        # ── THEME TOGGLE ──────────────────────────────────────────────────
+        is_light = st.session_state.theme == "light"
+        toggle_label = "🌙 Dark Mode" if is_light else "☀️ Light Mode"
+        if st.button(toggle_label, key="theme_toggle"):
+            st.session_state.theme = "dark" if is_light else "light"
+            st.rerun()
+
         st.markdown("""
         <div class='sb-brand'>
             <div class='sb-logo'>Vinay</div>
@@ -1107,69 +1141,80 @@ def sidebar():
             unsafe_allow_html=True,
         )
 
-        # ── EXCEL UPLOAD ──────────────────────────────────────────────────
+        # ── BACKUP & RESTORE ──────────────────────────────────────────────
         st.markdown("<div class='sb-sep'></div>", unsafe_allow_html=True)
-        with st.expander("📤 Upload Sales Data (Excel)"):
-            xfile = st.file_uploader("Upload .xlsx file", type=["xlsx"], key="excel_upload")
-            if xfile is not None:
-                try:
-                    xdf = pd.read_excel(xfile)
-                    # Normalize column names to match internal schema
-                    col_map = {
-                        "Id": "id", "Customer Name": "customer_name",
-                        "Customer Phone": "customer_phone", "Sale Date": "sale_date",
-                        "Product Category": "product_category",
-                        "Product Description": "product_description",
-                        "Vendor": "vendor", "Buying Price": "buying_price",
-                        "Selling Price": "selling_price", "Profit": "profit",
-                        "Profit Margin %": "margin", "Amount Paid": "amount_paid",
-                        "Pending Amount": "pending_amount",
-                        "Payment Status": "payment_status", "Delayed": "delay_status",
-                        "Payment Method": "payment_method", "Notes": "notes",
-                        "Created At": "created_at",
-                    }
-                    xdf.rename(columns=col_map, inplace=True)
-                    st.info(f"Found **{len(xdf)}** rows in uploaded file.")
+        st.markdown("**💾 Backup & Restore**")
 
-                    if st.button("Import & Deduplicate", use_container_width=True, key="import_btn"):
-                        col = get_col()
-                        existing_ids = set(
-                            doc["id"] for doc in col.find({}, {"_id": 0, "id": 1}) if "id" in doc
-                        )
-                        inserted, skipped = 0, 0
-                        for _, row in xdf.iterrows():
-                            rid = row.get("id")
-                            if pd.notna(rid) and int(rid) in existing_ids:
-                                skipped += 1
-                                continue
-                            rec = {k: (None if pd.isna(v) else v) for k, v in row.items()}
-                            # Convert numeric id
-                            if "id" in rec and rec["id"] is not None:
-                                rec["id"] = int(rec["id"])
-                            # Map delay_status
-                            ds = rec.get("delay_status", "No")
-                            rec["delay_status"] = 1 if str(ds).strip().lower() in ("yes","1","true") else 0
-                            # Map payment_received
-                            ps = rec.get("payment_status", "Pending")
-                            rec["payment_received"] = 1 if str(ps).strip().lower() in ("received","paid","1") else 0
-                            # Ensure numeric fields
-                            for f in ["buying_price","selling_price","amount_paid","pending_amount"]:
-                                try: rec[f] = float(rec.get(f) or 0)
-                                except: rec[f] = 0.0
-                            # Convert sale_date
-                            sd = rec.get("sale_date")
-                            if sd is not None and not isinstance(sd, str):
-                                try: rec["sale_date"] = str(pd.Timestamp(sd).date())
-                                except: rec["sale_date"] = str(sd)
-                            col.insert_one(rec)
-                            if rid is not None:
-                                existing_ids.add(int(rid))
-                            inserted += 1
-                        invalidate_cache()
-                        st.success(f"✓ Imported {inserted} rows. Skipped {skipped} duplicates.")
-                        st.rerun()
-                except Exception as ex:
-                    st.error(f"Error reading file: {ex}")
+        # Download checkpoint — export all sales as Excel
+        df_all = fetch_all()
+        if not df_all.empty:
+            excel_bytes = to_excel(df_all)
+            st.download_button(
+                label="⬇️ Download checkpoint",
+                data=excel_bytes,
+                file_name=f"boutique_backup_{date.today()}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True,
+                key="backup_download",
+            )
+        else:
+            st.button("⬇️ Download checkpoint", disabled=True, use_container_width=True, key="backup_download_empty")
+
+        # Restore from checkpoint
+        st.markdown("⬆️ **Restore from checkpoint**")
+        xfile = st.file_uploader("", type=["xlsx"], key="excel_upload", label_visibility="collapsed")
+        if xfile is not None:
+            try:
+                xdf = pd.read_excel(xfile)
+                col_map = {
+                    "Id": "id", "Customer Name": "customer_name",
+                    "Customer Phone": "customer_phone", "Sale Date": "sale_date",
+                    "Product Category": "product_category",
+                    "Product Description": "product_description",
+                    "Vendor": "vendor", "Buying Price": "buying_price",
+                    "Selling Price": "selling_price", "Profit": "profit",
+                    "Profit Margin %": "margin", "Amount Paid": "amount_paid",
+                    "Pending Amount": "pending_amount",
+                    "Payment Status": "payment_status", "Delayed": "delay_status",
+                    "Payment Method": "payment_method", "Notes": "notes",
+                    "Created At": "created_at",
+                }
+                xdf.rename(columns=col_map, inplace=True)
+                st.caption(f"Found **{len(xdf)}** rows")
+                if st.button("Import & Deduplicate", use_container_width=True, key="import_btn"):
+                    db_col = get_col()
+                    existing_ids = set(
+                        doc["id"] for doc in db_col.find({}, {"_id": 0, "id": 1}) if "id" in doc
+                    )
+                    inserted, skipped = 0, 0
+                    for _, row in xdf.iterrows():
+                        rid = row.get("id")
+                        if pd.notna(rid) and int(rid) in existing_ids:
+                            skipped += 1
+                            continue
+                        rec = {k: (None if pd.isna(v) else v) for k, v in row.items()}
+                        if "id" in rec and rec["id"] is not None:
+                            rec["id"] = int(rec["id"])
+                        ds = rec.get("delay_status", "No")
+                        rec["delay_status"] = 1 if str(ds).strip().lower() in ("yes","1","true") else 0
+                        ps = rec.get("payment_status", "Pending")
+                        rec["payment_received"] = 1 if str(ps).strip().lower() in ("received","paid","1") else 0
+                        for f in ["buying_price","selling_price","amount_paid","pending_amount"]:
+                            try: rec[f] = float(rec.get(f) or 0)
+                            except: rec[f] = 0.0
+                        sd = rec.get("sale_date")
+                        if sd is not None and not isinstance(sd, str):
+                            try: rec["sale_date"] = str(pd.Timestamp(sd).date())
+                            except: rec["sale_date"] = str(sd)
+                        db_col.insert_one(rec)
+                        if rid is not None:
+                            existing_ids.add(int(rid))
+                        inserted += 1
+                    invalidate_cache()
+                    st.success(f"✓ {inserted} imported, {skipped} duplicates skipped.")
+                    st.rerun()
+            except Exception as ex:
+                st.error(f"Error: {ex}")
 
     return nav
 # =====================================================
@@ -1757,6 +1802,11 @@ def page_inventory():
 def main():
     if "logged_in" not in st.session_state:
         st.session_state.logged_in = False
+    if "theme" not in st.session_state:
+        st.session_state.theme = "dark"
+
+    # Apply light mode CSS overrides if needed
+    inject_theme()
 
     if not st.session_state.logged_in:
         page_add_sale(public=True)
