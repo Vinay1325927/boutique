@@ -45,32 +45,41 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Jost:wght@300;400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&family=DM+Serif+Display:ital@0;1&display=swap');
 
 :root {
-    --navy-1:       #070C18;
-    --navy-2:       #0B1221;
-    --navy-3:       #0F1A2E;
-    --navy-4:       #152238;
-    --navy-5:       #1C2D47;
-    --blue:         #2E6FD8;
-    --blue-soft:    #4D8AE8;
-    --blue-pale:    #A8C4F0;
-    --blue-glow:    rgba(46,111,216,0.15);
-    --cream:        #E8EEF8;
-    --cream-dim:    #C8D4E8;
-    --muted:        #6A84A8;
-    --dim:          #3D5478;
-    --emerald:      #3D9A6C;
-    --rose:         #C05060;
-    --sky:          #4A9AC8;
-    --r:            8px;
+    /* Light mode palette */
+    --bg:           #F4F7FC;
+    --bg-2:         #EBF0FA;
+    --surface:      #FFFFFF;
+    --surface-2:    #F8FAFF;
+    --blue:         #2563EB;
+    --blue-soft:    #3B82F6;
+    --blue-pale:    #BFDBFE;
+    --blue-glow:    rgba(37,99,235,0.12);
+    --text:         #0F172A;
+    --text-2:       #334155;
+    --muted:        #64748B;
+    --dim:          #94A3B8;
+    --emerald:      #059669;
+    --rose:         #DC2626;
+    --amber:        #D97706;
+    --r:            10px;
     --r-lg:         14px;
-    --r-xl:         20px;
-    --border:       rgba(46,111,216,0.18);
-    --border-hover: rgba(46,111,216,0.42);
-    --shadow:       0 2px 24px rgba(0,0,0,0.5);
-    --shadow-lg:    0 8px 48px rgba(0,0,0,0.65);
+    --r-xl:         22px;
+    --border:       rgba(37,99,235,0.12);
+    --border-hover: rgba(37,99,235,0.35);
+    --shadow-sm:    0 1px 3px rgba(15,23,42,0.06), 0 1px 2px rgba(15,23,42,0.04);
+    --shadow:       0 4px 16px rgba(15,23,42,0.08), 0 2px 6px rgba(15,23,42,0.05);
+    --shadow-lg:    0 12px 40px rgba(37,99,235,0.14), 0 4px 12px rgba(15,23,42,0.06);
+    /* Legacy aliases kept so existing rules don't break */
+    --navy-1:       #F4F7FC;
+    --navy-2:       #EBF0FA;
+    --navy-3:       #FFFFFF;
+    --navy-4:       #F0F5FF;
+    --navy-5:       #E2EAFF;
+    --cream:        #0F172A;
+    --cream-dim:    #334155;
 }
 
 /* ━━━ SIDEBAR THEME TOGGLE ━━━ */
@@ -80,25 +89,25 @@ st.markdown("""
     color: var(--muted) !important;
     font-size: 0.7rem !important;
     padding: 0.3rem 0.8rem !important;
-    letter-spacing: 0.08em !important;
+    letter-spacing: 0.06em !important;
     width: auto !important;
     float: right;
     margin-bottom: 0.5rem;
 }
 [data-testid="stSidebar"] > div:first-child > div:first-child .stButton > button:hover {
     border-color: var(--border-hover) !important;
-    color: var(--cream) !important;
+    color: var(--blue) !important;
     transform: none !important;
-    background: rgba(46,111,216,0.1) !important;
+    background: var(--blue-glow) !important;
 }
 
 html, body, [class*="css"] {
-    font-family: 'Jost', sans-serif !important;
-    background: var(--navy-1) !important;
-    color: #FFFFFF !important;
+    font-family: 'DM Sans', sans-serif !important;
+    background: var(--bg) !important;
+    color: var(--text) !important;
 }
 
-/* ━━━ NUCLEAR WHITE TEXT — all inputs/selects/dates ━━━ */
+/* ━━━ ALL INPUTS — DARK TEXT FOR LIGHT MODE ━━━ */
 input:not([type="radio"]):not([type="checkbox"]),
 textarea,
 [data-baseweb="input"] input,
@@ -106,16 +115,16 @@ textarea,
 [data-baseweb="textarea"] textarea,
 [data-baseweb="date-picker"] input,
 [data-baseweb="select"] input {
-    color: #FFFFFF !important;
-    -webkit-text-fill-color: #FFFFFF !important;
-    caret-color: #FFFFFF !important;
-    background-color: var(--navy-3) !important;
+    color: var(--text) !important;
+    -webkit-text-fill-color: var(--text) !important;
+    caret-color: var(--blue) !important;
+    background-color: var(--surface) !important;
 }
 [data-baseweb="input"] *,
 [data-baseweb="base-input"] *,
 [data-baseweb="textarea"] * {
-    color: #FFFFFF !important;
-    -webkit-text-fill-color: #FFFFFF !important;
+    color: var(--text) !important;
+    -webkit-text-fill-color: var(--text) !important;
 }
 /* Selectbox displayed value */
 [data-baseweb="select"] > div > div,
@@ -123,88 +132,91 @@ textarea,
 [data-baseweb="select"] span,
 [class*="ValueContainer"] > div,
 [class*="singleValue"] {
-    color: #FFFFFF !important;
-    -webkit-text-fill-color: #FFFFFF !important;
+    color: var(--text) !important;
+    -webkit-text-fill-color: var(--text) !important;
 }
 /* Number stepper */
 .stNumberInput div[data-baseweb="input"] input,
 .stNumberInput input[type="number"] {
-    color: #FFFFFF !important;
-    -webkit-text-fill-color: #FFFFFF !important;
+    color: var(--text) !important;
+    -webkit-text-fill-color: var(--text) !important;
 }
 /* Date displayed value */
 .stDateInput div[data-baseweb="input"] input,
 .stDateInput input[type="text"] {
-    color: #FFFFFF !important;
-    -webkit-text-fill-color: #FFFFFF !important;
+    color: var(--text) !important;
+    -webkit-text-fill-color: var(--text) !important;
 }
 .stApp {
-    background: var(--navy-1) !important;
+    background: var(--bg) !important;
     background-image:
-        radial-gradient(ellipse 900px 600px at 0% 0%, rgba(46,111,216,0.08) 0%, transparent 70%),
-        radial-gradient(ellipse 700px 500px at 100% 100%, rgba(46,111,216,0.05) 0%, transparent 70%);
+        radial-gradient(ellipse 900px 600px at 0% 0%, rgba(37,99,235,0.04) 0%, transparent 70%),
+        radial-gradient(ellipse 700px 500px at 100% 100%, rgba(37,99,235,0.03) 0%, transparent 70%);
     background-attachment: fixed;
 }
-::-webkit-scrollbar { width: 3px; height: 3px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(46,111,216,0.4); border-radius: 99px; }
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: var(--bg-2); border-radius: 99px; }
+::-webkit-scrollbar-thumb { background: rgba(37,99,235,0.3); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(37,99,235,0.5); }
 
 h1, h2, h3 {
-    font-family: 'Playfair Display', serif !important;
-    color: var(--cream) !important;
-    letter-spacing: 0.01em;
-    font-weight: 500 !important;
+    font-family: 'DM Serif Display', serif !important;
+    color: var(--text) !important;
+    letter-spacing: -0.01em;
+    font-weight: 400 !important;
 }
 h4, h5, h6 {
-    font-family: 'Jost', sans-serif !important;
+    font-family: 'DM Sans', sans-serif !important;
     color: var(--muted) !important;
     text-transform: uppercase !important;
-    letter-spacing: 0.14em !important;
-    font-size: 0.72rem !important;
+    letter-spacing: 0.1em !important;
+    font-size: 0.7rem !important;
     font-weight: 600 !important;
 }
 
 .page-title {
-    font-family: 'Playfair Display', serif;
-    font-size: 2.2rem;
-    font-weight: 500;
-    color: var(--cream);
-    letter-spacing: 0.01em;
+    font-family: 'DM Serif Display', serif;
+    font-size: 2.1rem;
+    font-weight: 400;
+    color: var(--text);
+    letter-spacing: -0.02em;
     line-height: 1.15;
     margin-bottom: 0.2rem;
 }
 .page-sub {
-    font-size: 0.72rem;
+    font-size: 0.7rem;
     text-transform: uppercase;
-    letter-spacing: 0.22em;
+    letter-spacing: 0.18em;
     color: var(--dim);
     margin-bottom: 2.4rem;
-    font-weight: 400;
+    font-weight: 500;
 }
-.rule { height:1px; background:linear-gradient(90deg, var(--blue) 0%, rgba(46,111,216,0.2) 60%, transparent 100%); margin:2rem 0; border:none; }
-.rule-sm { height:1px; background:linear-gradient(90deg, rgba(46,111,216,0.4), transparent); margin:1.2rem 0; border:none; }
+.rule { height:1px; background:linear-gradient(90deg, var(--blue) 0%, rgba(37,99,235,0.15) 60%, transparent 100%); margin:2rem 0; border:none; }
+.rule-sm { height:1px; background:linear-gradient(90deg, rgba(37,99,235,0.25), transparent); margin:1.2rem 0; border:none; }
 
 /* ━━━ SIDEBAR ━━━ */
 [data-testid="stSidebar"] {
-    background: var(--navy-2) !important;
+    background: var(--surface) !important;
     border-right: 1px solid var(--border) !important;
+    box-shadow: 2px 0 12px rgba(15,23,42,0.05) !important;
 }
-[data-testid="stSidebar"] * { color: var(--cream) !important; }
+[data-testid="stSidebar"] * { color: var(--text) !important; }
 .sb-brand { padding: 2rem 1.5rem 0.5rem; text-align: center; }
 .sb-logo {
-    font-family: 'Playfair Display', serif;
+    font-family: 'DM Serif Display', serif;
     font-size: 1.75rem;
-    font-weight: 500;
-    color: var(--blue-soft);
-    letter-spacing: 0.12em;
+    font-weight: 400;
+    color: var(--blue);
+    letter-spacing: -0.01em;
     line-height: 1;
 }
 .sb-mark {
     font-size: 0.6rem;
     text-transform: uppercase;
-    letter-spacing: 0.28em;
-    color: var(--dim);
+    letter-spacing: 0.22em;
+    color: var(--muted);
     margin-top: 0.3rem;
+    font-weight: 600;
 }
 [data-testid="stSidebar"] .stRadio > div {
     gap: 2px !important;
@@ -215,18 +227,18 @@ h4, h5, h6 {
     border: none !important;
     border-radius: var(--r) !important;
     color: var(--muted) !important;
-    font-size: 0.82rem !important;
-    font-weight: 400 !important;
-    letter-spacing: 0.03em !important;
+    font-size: 0.84rem !important;
+    font-weight: 500 !important;
+    letter-spacing: 0.01em !important;
     padding: 0.55rem 1rem 0.55rem 0.75rem !important;
-    transition: all 0.2s ease !important;
+    transition: all 0.18s ease !important;
     cursor: pointer;
     display: flex;
     align-items: center;
 }
 [data-testid="stSidebar"] .stRadio > div > label:hover {
-    background: rgba(46,111,216,0.12) !important;
-    color: var(--cream) !important;
+    background: var(--blue-glow) !important;
+    color: var(--blue) !important;
 }
 [data-testid="stSidebar"] .stRadio > div > label > div:first-child {
     display: flex !important;
@@ -239,48 +251,52 @@ h4, h5, h6 {
     border-radius: 50% !important;
     margin-right: 8px !important;
     background: transparent !important;
-    transition: all 0.2s !important;
+    transition: all 0.18s !important;
 }
 .sb-user {
     font-size: 0.75rem;
-    color: var(--dim);
+    color: var(--muted);
     text-align: center;
     padding: 0.6rem 0 1.5rem;
-    letter-spacing: 0.06em;
+    letter-spacing: 0.04em;
+    font-weight: 500;
 }
 .sb-sep { height: 1px; background: var(--border); margin: 0.8rem 1rem; }
 
 /* ━━━ PUBLIC BANNER ━━━ */
 .pub-banner {
-    background: linear-gradient(135deg, var(--navy-2) 0%, var(--navy-3) 100%);
+    background: linear-gradient(135deg, #FFFFFF 0%, #F0F6FF 100%);
     border: 1px solid var(--border);
     border-radius: var(--r-xl);
-    padding: 2rem 2.5rem 1.5rem;
+    padding: 2.2rem 2.8rem 1.8rem;
     margin-bottom: 2rem;
     position: relative;
     overflow: hidden;
+    box-shadow: var(--shadow);
 }
 .pub-banner::before {
     content: '';
     position: absolute;
     top: 0; left: 0; right: 0;
-    height: 2px;
-    background: linear-gradient(90deg, transparent, var(--blue), transparent);
+    height: 3px;
+    background: linear-gradient(90deg, var(--blue), var(--blue-soft), transparent);
+    border-radius: var(--r-xl) var(--r-xl) 0 0;
 }
 .pub-banner-title {
-    font-family: 'Playfair Display', serif;
-    font-size: 1.9rem;
-    font-weight: 500;
-    color: var(--cream);
-    letter-spacing: 0.01em;
+    font-family: 'DM Serif Display', serif;
+    font-size: 2rem;
+    font-weight: 400;
+    color: var(--text);
+    letter-spacing: -0.02em;
     line-height: 1.1;
-    margin-bottom: 0.2rem;
+    margin-bottom: 0.3rem;
 }
 .pub-banner-sub {
     font-size: 0.68rem;
     text-transform: uppercase;
-    letter-spacing: 0.28em;
-    color: var(--dim);
+    letter-spacing: 0.22em;
+    color: var(--muted);
+    font-weight: 600;
 }
 
 /* ━━━ ADMIN LOGIN PANEL (bottom) ━━━ */
@@ -292,110 +308,113 @@ h4, h5, h6 {
 .admin-strip-label {
     font-size: 0.62rem;
     text-transform: uppercase;
-    letter-spacing: 0.26em;
-    color: var(--navy-5);
+    letter-spacing: 0.22em;
+    color: var(--dim);
     text-align: center;
     margin-bottom: 0.8rem;
+    font-weight: 600;
 }
 
 /* ━━━ METRICS ━━━ */
 [data-testid="stMetric"] {
-    background: var(--navy-3) !important;
+    background: var(--surface) !important;
     border: 1px solid var(--border) !important;
     border-radius: var(--r-lg) !important;
     padding: 1.25rem 1.4rem !important;
     position: relative;
     overflow: hidden;
-    transition: border-color 0.25s ease, transform 0.2s ease !important;
+    box-shadow: var(--shadow-sm) !important;
+    transition: box-shadow 0.2s ease, transform 0.2s ease !important;
 }
 [data-testid="stMetric"]::after {
     content: '';
     position: absolute;
     bottom: 0; left: 0; right: 0;
     height: 2px;
-    background: linear-gradient(90deg, var(--blue), transparent);
+    background: linear-gradient(90deg, var(--blue), var(--blue-soft), transparent);
     opacity: 0.6;
 }
 [data-testid="stMetric"]:hover {
-    border-color: var(--border-hover) !important;
+    box-shadow: var(--shadow) !important;
     transform: translateY(-2px);
 }
 [data-testid="stMetricLabel"] > div {
     color: var(--muted) !important;
     font-size: 0.68rem !important;
     text-transform: uppercase !important;
-    letter-spacing: 0.16em !important;
+    letter-spacing: 0.12em !important;
     font-weight: 600 !important;
-    font-family: 'Jost', sans-serif !important;
+    font-family: 'DM Sans', sans-serif !important;
 }
 [data-testid="stMetricValue"] {
-    color: var(--cream) !important;
-    font-family: 'Playfair Display', serif !important;
+    color: var(--text) !important;
+    font-family: 'DM Serif Display', serif !important;
     font-size: 1.7rem !important;
-    font-weight: 500 !important;
-    letter-spacing: 0 !important;
+    font-weight: 400 !important;
+    letter-spacing: -0.02em !important;
     line-height: 1.2 !important;
 }
 
 /* ━━━ BUTTONS ━━━ */
 .stButton > button {
-    background: transparent !important;
-    color: var(--blue-soft) !important;
-    border: 1px solid var(--border-hover) !important;
+    background: var(--surface) !important;
+    color: var(--blue) !important;
+    border: 1.5px solid rgba(37,99,235,0.28) !important;
     border-radius: var(--r) !important;
-    font-family: 'Jost', sans-serif !important;
-    font-weight: 500 !important;
+    font-family: 'DM Sans', sans-serif !important;
+    font-weight: 600 !important;
     font-size: 0.8rem !important;
-    letter-spacing: 0.1em !important;
-    text-transform: uppercase !important;
+    letter-spacing: 0.04em !important;
     padding: 0.6rem 1.4rem !important;
-    transition: all 0.2s ease !important;
+    transition: all 0.18s ease !important;
+    box-shadow: var(--shadow-sm) !important;
     width: 100% !important;
 }
 .stButton > button:hover {
-    background: rgba(46,111,216,0.14) !important;
+    background: var(--blue) !important;
     border-color: var(--blue) !important;
-    color: var(--blue-pale) !important;
+    color: #FFFFFF !important;
     transform: translateY(-1px) !important;
+    box-shadow: 0 4px 16px rgba(37,99,235,0.25) !important;
 }
 .stButton > button:active { transform: scale(0.98) !important; }
 
 .stDownloadButton > button {
-    background: transparent !important;
+    background: var(--surface-2) !important;
     color: var(--muted) !important;
     border: 1px solid var(--border) !important;
     border-radius: var(--r) !important;
     font-size: 0.78rem !important;
-    font-weight: 400 !important;
-    letter-spacing: 0.08em !important;
-    text-transform: uppercase !important;
-    transition: all 0.2s ease !important;
+    font-weight: 500 !important;
+    letter-spacing: 0.04em !important;
+    transition: all 0.18s ease !important;
     width: 100% !important;
 }
 .stDownloadButton > button:hover {
     border-color: var(--border-hover) !important;
-    color: var(--cream) !important;
+    color: var(--blue) !important;
+    background: var(--blue-glow) !important;
 }
 
 /* ━━━ FORM SUBMIT ━━━ */
 .stForm button[type="submit"] {
     background: var(--blue) !important;
-    color: #E8EEF8 !important;
+    color: #FFFFFF !important;
     border: none !important;
     border-radius: var(--r) !important;
-    font-family: 'Jost', sans-serif !important;
+    font-family: 'DM Sans', sans-serif !important;
     font-weight: 600 !important;
-    font-size: 0.82rem !important;
-    letter-spacing: 0.14em !important;
-    text-transform: uppercase !important;
+    font-size: 0.84rem !important;
+    letter-spacing: 0.04em !important;
     padding: 0.85rem 2.5rem !important;
     width: 100% !important;
-    transition: all 0.25s ease !important;
+    transition: all 0.2s ease !important;
+    box-shadow: 0 2px 8px rgba(37,99,235,0.2) !important;
 }
 .stForm button[type="submit"]:hover {
-    background: var(--blue-soft) !important;
+    background: #1D4ED8 !important;
     transform: translateY(-2px) !important;
-    box-shadow: 0 6px 24px rgba(46,111,216,0.4) !important;
+    box-shadow: 0 6px 24px rgba(37,99,235,0.35) !important;
 }
 
 /* ━━━ INPUTS ━━━ */
@@ -405,78 +424,82 @@ h4, h5, h6 {
 .stDateInput > div > div > input,
 .stDateInput input,
 input[type="text"], input[type="number"], input[type="date"], textarea {
-    background: var(--navy-3) !important;
-    border: 1px solid var(--border) !important;
+    background: var(--surface) !important;
+    border: 1.5px solid rgba(37,99,235,0.18) !important;
     border-radius: var(--r) !important;
-    color: #FFFFFF !important;
-    font-family: 'Jost', sans-serif !important;
+    color: var(--text) !important;
+    font-family: 'DM Sans', sans-serif !important;
     font-size: 0.88rem !important;
-    font-weight: 300 !important;
+    font-weight: 400 !important;
     padding: 0.6rem 0.9rem !important;
-    transition: border-color 0.2s ease !important;
-    -webkit-text-fill-color: #FFFFFF !important;
+    transition: border-color 0.18s ease, box-shadow 0.18s ease !important;
+    -webkit-text-fill-color: var(--text) !important;
 }
 .stTextInput > div > div > input:focus,
 .stNumberInput > div > div > input:focus,
 .stTextArea > div > div > textarea:focus,
 .stDateInput > div > div > input:focus {
     border-color: var(--blue) !important;
-    box-shadow: 0 0 0 3px rgba(46,111,216,0.15) !important;
-    color: #FFFFFF !important;
-    -webkit-text-fill-color: #FFFFFF !important;
+    box-shadow: 0 0 0 3px rgba(37,99,235,0.1) !important;
+    color: var(--text) !important;
+    -webkit-text-fill-color: var(--text) !important;
 }
 .stTextInput > div > div > input::placeholder,
 .stTextArea > div > div > textarea::placeholder,
-.stDateInput > div > div > input::placeholder { color: var(--muted) !important; -webkit-text-fill-color: var(--muted) !important; }
+.stDateInput > div > div > input::placeholder { color: var(--dim) !important; -webkit-text-fill-color: var(--dim) !important; }
 
 /* Date picker calendar popup */
 [data-baseweb="calendar"] {
-    background: var(--navy-3) !important;
+    background: var(--surface) !important;
     border: 1px solid var(--border) !important;
+    box-shadow: var(--shadow-lg) !important;
+    border-radius: var(--r-lg) !important;
 }
-[data-baseweb="calendar"] * { color: #FFFFFF !important; background: transparent !important; }
-[data-baseweb="calendar"] [aria-selected="true"] { background: var(--blue) !important; }
-[data-baseweb="calendar"] button:hover { background: var(--navy-5) !important; }
+[data-baseweb="calendar"] * { color: var(--text) !important; background: transparent !important; }
+[data-baseweb="calendar"] [aria-selected="true"] { background: var(--blue) !important; color: #FFFFFF !important; }
+[data-baseweb="calendar"] button:hover { background: var(--bg-2) !important; }
 
 /* Date input wrapper */
 .stDateInput > div {
-    background: var(--navy-3) !important;
+    background: var(--surface) !important;
     border-radius: var(--r) !important;
 }
-.stDateInput > div > div { background: var(--navy-3) !important; }
+.stDateInput > div > div { background: var(--surface) !important; }
 .stDateInput svg { fill: var(--muted) !important; }
 
 /* Selectbox */
 .stSelectbox > div > div,
 .stSelectbox [data-baseweb="select"] > div {
-    background: var(--navy-3) !important;
-    border: 1px solid var(--border) !important;
+    background: var(--surface) !important;
+    border: 1.5px solid rgba(37,99,235,0.18) !important;
     border-radius: var(--r) !important;
-    color: #FFFFFF !important;
-    transition: border-color 0.2s ease !important;
+    color: var(--text) !important;
+    transition: border-color 0.18s ease !important;
 }
 .stSelectbox > div > div:hover,
 .stSelectbox [data-baseweb="select"] > div:hover { border-color: var(--border-hover) !important; }
 .stSelectbox [data-baseweb="select"] span,
-.stSelectbox [data-baseweb="select"] div { color: #FFFFFF !important; }
+.stSelectbox [data-baseweb="select"] div { color: var(--text) !important; }
 
 /* Selectbox dropdown menu */
 [data-baseweb="popover"] [data-baseweb="menu"],
 [data-baseweb="popover"] ul {
-    background: var(--navy-3) !important;
+    background: var(--surface) !important;
     border: 1px solid var(--border) !important;
+    box-shadow: var(--shadow-lg) !important;
+    border-radius: var(--r-lg) !important;
 }
 [data-baseweb="popover"] li,
 [data-baseweb="popover"] [role="option"] {
-    background: var(--navy-3) !important;
-    color: #FFFFFF !important;
+    background: var(--surface) !important;
+    color: var(--text) !important;
 }
 [data-baseweb="popover"] li:hover,
-[data-baseweb="popover"] [role="option"]:hover { background: var(--navy-5) !important; }
+[data-baseweb="popover"] [role="option"]:hover { background: var(--bg-2) !important; }
 
 /* Number input */
-.stNumberInput > div > div { background: var(--navy-3) !important; border-radius: var(--r) !important; }
-.stNumberInput input { color: #FFFFFF !important; -webkit-text-fill-color: #FFFFFF !important; }
+.stNumberInput > div > div { background: var(--surface) !important; border-radius: var(--r) !important; }
+.stNumberInput input { color: var(--text) !important; -webkit-text-fill-color: var(--text) !important; }
 
 /* ━━━ LABELS ━━━ */
 .stTextInput label, .stNumberInput label, .stSelectbox label,
@@ -485,13 +508,13 @@ input[type="text"], input[type="number"], input[type="date"], textarea {
 .stTextArea label p, .stDateInput label p, .stRadio label p,
 [data-testid="stWidgetLabel"], [data-testid="stWidgetLabel"] p,
 [data-testid="stWidgetLabel"] span {
-    color: #FFFFFF !important;
-    -webkit-text-fill-color: #FFFFFF !important;
+    color: var(--text-2) !important;
+    -webkit-text-fill-color: var(--text-2) !important;
     font-size: 0.75rem !important;
-    font-weight: 700 !important;
+    font-weight: 600 !important;
     text-transform: uppercase !important;
-    letter-spacing: 0.14em !important;
-    font-family: 'Jost', sans-serif !important;
+    letter-spacing: 0.1em !important;
+    font-family: 'DM Sans', sans-serif !important;
 }
 
 /* ━━━ DATAFRAME ━━━ */
@@ -499,31 +522,32 @@ input[type="text"], input[type="number"], input[type="date"], textarea {
     border-radius: var(--r-lg) !important;
     border: 1px solid var(--border) !important;
     overflow: hidden !important;
+    box-shadow: var(--shadow-sm) !important;
 }
 [data-testid="stDataFrame"] th {
-    background: var(--navy-3) !important;
+    background: var(--bg-2) !important;
     color: var(--muted) !important;
     font-size: 0.68rem !important;
     text-transform: uppercase !important;
-    letter-spacing: 0.12em !important;
-    font-weight: 600 !important;
+    letter-spacing: 0.1em !important;
+    font-weight: 700 !important;
     border-bottom: 1px solid var(--border) !important;
     padding: 0.75rem 1rem !important;
 }
 [data-testid="stDataFrame"] td {
-    background: var(--navy-2) !important;
-    color: var(--cream) !important;
+    background: var(--surface) !important;
+    color: var(--text-2) !important;
     font-size: 0.85rem !important;
-    font-weight: 300 !important;
-    border-bottom: 1px solid rgba(46,111,216,0.08) !important;
+    font-weight: 400 !important;
+    border-bottom: 1px solid rgba(37,99,235,0.06) !important;
     padding: 0.7rem 1rem !important;
 }
-[data-testid="stDataFrame"] tr:hover td { background: var(--navy-3) !important; }
+[data-testid="stDataFrame"] tr:hover td { background: var(--bg-2) !important; }
 
 /* ━━━ TABS ━━━ */
 .stTabs [data-baseweb="tab-list"] {
     background: transparent !important;
-    border-bottom: 1px solid var(--border) !important;
+    border-bottom: 2px solid var(--border) !important;
     border-radius: 0 !important;
     padding: 0 !important;
     gap: 0 !important;
@@ -532,120 +556,237 @@ input[type="text"], input[type="number"], input[type="date"], textarea {
     background: transparent !important;
     border-radius: 0 !important;
     color: var(--dim) !important;
-    font-family: 'Jost', sans-serif !important;
-    font-weight: 400 !important;
-    font-size: 0.78rem !important;
-    letter-spacing: 0.08em !important;
-    text-transform: uppercase !important;
+    font-family: 'DM Sans', sans-serif !important;
+    font-weight: 500 !important;
+    font-size: 0.8rem !important;
+    letter-spacing: 0.04em !important;
     padding: 0.75rem 1.25rem !important;
     border-bottom: 2px solid transparent !important;
-    transition: all 0.2s !important;
-    margin-bottom: -1px !important;
+    transition: all 0.18s !important;
+    margin-bottom: -2px !important;
 }
 .stTabs [aria-selected="true"] {
-    color: var(--cream) !important;
+    color: var(--blue) !important;
     border-bottom-color: var(--blue) !important;
+    font-weight: 600 !important;
 }
-.stTabs [data-baseweb="tab"]:hover { color: var(--cream) !important; }
+.stTabs [data-baseweb="tab"]:hover { color: var(--text) !important; }
 
 /* ━━━ ALERTS ━━━ */
 .stSuccess {
-    background: rgba(61,154,108,0.12) !important;
-    border: 1px solid rgba(61,154,108,0.3) !important;
+    background: rgba(5,150,105,0.07) !important;
+    border: 1px solid rgba(5,150,105,0.25) !important;
     border-radius: var(--r) !important;
-    color: #7ADFA0 !important;
 }
+.stSuccess * { color: #065f46 !important; }
 .stInfo {
-    background: rgba(46,111,216,0.1) !important;
-    border: 1px solid rgba(46,111,216,0.28) !important;
+    background: rgba(37,99,235,0.06) !important;
+    border: 1px solid rgba(37,99,235,0.2) !important;
     border-radius: var(--r) !important;
 }
+.stInfo * { color: #1e3a8a !important; }
 .stWarning {
-    background: rgba(200,160,50,0.1) !important;
-    border: 1px solid rgba(200,160,50,0.28) !important;
+    background: rgba(217,119,6,0.07) !important;
+    border: 1px solid rgba(217,119,6,0.25) !important;
     border-radius: var(--r) !important;
 }
+.stWarning * { color: #92400e !important; }
 .stError {
-    background: rgba(192,80,96,0.1) !important;
-    border: 1px solid rgba(192,80,96,0.28) !important;
+    background: rgba(220,38,38,0.06) !important;
+    border: 1px solid rgba(220,38,38,0.22) !important;
     border-radius: var(--r) !important;
 }
+.stError * { color: #991b1b !important; }
 
 /* ━━━ RADIO (inline) ━━━ */
 .stRadio > div { gap: 0.5rem !important; flex-direction: row !important; }
 .stRadio > div > label {
-    background: var(--navy-3) !important;
-    border: 1px solid var(--border) !important;
+    background: var(--surface) !important;
+    border: 1.5px solid var(--border) !important;
     border-radius: var(--r) !important;
     padding: 0.5rem 1.1rem !important;
     color: var(--muted) !important;
     font-size: 0.8rem !important;
-    font-weight: 400 !important;
-    letter-spacing: 0.04em !important;
-    transition: all 0.2s !important;
+    font-weight: 500 !important;
+    letter-spacing: 0.02em !important;
+    transition: all 0.18s !important;
     cursor: pointer;
+    box-shadow: var(--shadow-sm) !important;
 }
 .stRadio > div > label:hover {
-    border-color: var(--border-hover) !important;
-    color: var(--cream) !important;
+    border-color: var(--blue) !important;
+    color: var(--blue) !important;
+    background: var(--blue-glow) !important;
 }
 
 /* ━━━ SECTION HEADERS ━━━ */
 .sec-head {
-    font-family: 'Playfair Display', serif;
+    font-family: 'DM Serif Display', serif;
     font-size: 1.05rem;
-    font-weight: 500;
+    font-weight: 400;
     font-style: italic;
-    color: var(--cream);
+    color: var(--text);
     margin: 1.8rem 0 1rem;
     padding-bottom: 0.6rem;
     border-bottom: 1px solid var(--border);
-    letter-spacing: 0.01em;
+    letter-spacing: -0.01em;
 }
 
 /* ━━━ BADGES ━━━ */
 .badge {
     display: inline-block;
     font-size: 0.68rem;
-    font-weight: 600;
-    letter-spacing: 0.1em;
+    font-weight: 700;
+    letter-spacing: 0.08em;
     text-transform: uppercase;
     padding: 0.22rem 0.65rem;
-    border-radius: 4px;
+    border-radius: 6px;
 }
-.badge-gold  { background: rgba(46,111,216,0.18); color: var(--blue-soft); }
-.badge-green { background: rgba(61,154,108,0.15); color: #7ADFA0; }
-.badge-red   { background: rgba(192,80,96,0.15);  color: #E08090; }
-.badge-muted { background: var(--navy-5);          color: var(--muted); }
+.badge-gold  { background: rgba(37,99,235,0.1); color: var(--blue); }
+.badge-green { background: rgba(5,150,105,0.1); color: #065f46; }
+.badge-red   { background: rgba(220,38,38,0.09); color: #991b1b; }
+.badge-muted { background: var(--bg-2); color: var(--muted); }
 
 /* ━━━ EMPTY STATE ━━━ */
 .empty { text-align: center; padding: 4rem 2rem; color: var(--dim); }
-.empty-glyph { font-size: 2rem; margin-bottom: 1rem; color: var(--navy-5); }
+.empty-glyph { font-size: 2rem; margin-bottom: 1rem; color: var(--border); }
 
 /* Number input spinners */
 button[data-testid="stNumberInputStepDown"],
 button[data-testid="stNumberInputStepUp"] {
-    background: var(--navy-5) !important;
+    background: var(--bg-2) !important;
     border-color: var(--border) !important;
     color: var(--muted) !important;
 }
 
 /* Expanders */
 .streamlit-expanderHeader {
-    background: var(--navy-3) !important;
+    background: var(--surface-2) !important;
     border: 1px solid var(--border) !important;
     border-radius: var(--r) !important;
-    color: var(--muted) !important;
-    font-family: 'Jost', sans-serif !important;
-    font-size: 0.82rem !important;
+    color: var(--text-2) !important;
+    font-family: 'DM Sans', sans-serif !important;
+    font-size: 0.84rem !important;
+    font-weight: 500 !important;
 }
 .streamlit-expanderContent {
-    background: var(--navy-2) !important;
+    background: var(--surface) !important;
     border: 1px solid var(--border) !important;
     border-top: none !important;
     border-radius: 0 0 var(--r) var(--r) !important;
     padding: 1rem !important;
 }
+
+/* ━━━ BACKUP & RESTORE CARDS ━━━ */
+.bk-card {
+    background: var(--surface);
+    border: 1.5px solid var(--border);
+    border-radius: var(--r-xl);
+    padding: 1.8rem 2rem;
+    box-shadow: var(--shadow);
+    transition: box-shadow 0.2s ease, transform 0.2s ease;
+    animation: fadeSlideUp 0.4s ease forwards;
+    opacity: 0;
+}
+.bk-card:hover { box-shadow: var(--shadow-lg); transform: translateY(-2px); }
+@keyframes fadeSlideUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0);   }
+}
+.bk-card-icon {
+    width: 42px; height: 42px;
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.25rem;
+    margin-bottom: 1rem;
+}
+.bk-icon-blue  { background: rgba(37,99,235,0.1); }
+.bk-icon-green { background: rgba(5,150,105,0.1); }
+.bk-icon-amber { background: rgba(217,119,6,0.1); }
+.bk-card-title {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 0.2rem;
+    letter-spacing: -0.01em;
+}
+.bk-card-desc {
+    font-size: 0.78rem;
+    color: var(--muted);
+    margin-bottom: 1.2rem;
+    line-height: 1.5;
+}
+.bk-status-badge {
+    display: inline-flex; align-items: center; gap: 0.4rem;
+    font-size: 0.7rem; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.1em;
+    padding: 0.28rem 0.7rem;
+    border-radius: 999px;
+}
+.bk-status-ok    { background: rgba(5,150,105,0.1); color: #065f46; }
+.bk-status-warn  { background: rgba(217,119,6,0.1);  color: #92400e; }
+.bk-status-info  { background: rgba(37,99,235,0.1);  color: #1e3a8a; }
+.bk-header {
+    background: linear-gradient(135deg, #FFFFFF 0%, #EBF3FF 100%);
+    border: 1.5px solid var(--border);
+    border-radius: var(--r-xl);
+    padding: 2rem 2.4rem;
+    margin-bottom: 1.8rem;
+    position: relative;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+}
+.bk-header::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--blue), var(--blue-soft));
+    border-radius: var(--r-xl) var(--r-xl) 0 0;
+}
+.bk-header-icon {
+    font-size: 2rem; margin-bottom: 0.6rem; display: block;
+}
+.bk-header-title {
+    font-family: 'DM Serif Display', serif;
+    font-size: 1.75rem; font-weight: 400; color: var(--text);
+    letter-spacing: -0.02em; line-height: 1.1; margin-bottom: 0.3rem;
+}
+.bk-header-sub {
+    font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.16em;
+    color: var(--muted); font-weight: 600;
+}
+.bk-progress-bar {
+    height: 6px; border-radius: 999px;
+    background: linear-gradient(90deg, var(--blue), var(--blue-soft));
+    animation: progressPulse 1.5s ease-in-out infinite alternate;
+}
+@keyframes progressPulse {
+    from { opacity: 0.6; width: 30%; }
+    to   { opacity: 1;   width: 85%; }
+}
+.bk-ts {
+    font-size: 0.72rem; color: var(--muted);
+    font-family: 'DM Sans', sans-serif; margin-top: 0.5rem;
+}
+
+/* File uploader */
+[data-testid="stFileUploader"] > div {
+    background: var(--surface-2) !important;
+    border: 2px dashed rgba(37,99,235,0.25) !important;
+    border-radius: var(--r-lg) !important;
+    transition: border-color 0.18s !important;
+}
+[data-testid="stFileUploader"] > div:hover {
+    border-color: var(--blue) !important;
+    background: var(--blue-glow) !important;
+}
+[data-testid="stFileUploader"] * { color: var(--muted) !important; }
+
+.stCaption, .stCaption * { color: var(--dim) !important; }
+
+p, span { color: var(--text-2); }
 </style>
 """, unsafe_allow_html=True)
 
@@ -656,150 +797,113 @@ button[data-testid="stNumberInputStepUp"] {
 
 # ── THEME TOGGLE — pure session_state, no JS needed ─────────────────────────
 if "theme" not in st.session_state:
-    st.session_state.theme = "dark"
+    st.session_state.theme = "light"
 
-_LIGHT_CSS = """
+_DARK_CSS = """
 <style>
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-   LIGHT MODE — clean white
+   DARK MODE OVERRIDE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
-.stApp,
-.stApp > div, .main, .main > div, section.main, section.main > div,
-[data-testid="stAppViewContainer"], [data-testid="stAppViewContainer"] > div,
-[data-testid="block-container"], [data-testid="block-container"] > div { background: #EEF2FA !important; }
-
-[data-testid="stSidebar"],
-[data-testid="stSidebar"] > div { background: #E2E8F4 !important; }
-
-[data-testid="stSidebar"], [data-testid="stSidebar"] *,
-[data-testid="stSidebar"] p, [data-testid="stSidebar"] span,
-[data-testid="stSidebar"] label, [data-testid="stSidebar"] div { color: #1A2A42 !important; -webkit-text-fill-color: #1A2A42 !important; }
-
-[data-testid="stSidebar"] .sb-logo { color: #2E6FD8 !important; -webkit-text-fill-color: #2E6FD8 !important; }
-[data-testid="stSidebar"] .sb-mark { color: #5070A0 !important; -webkit-text-fill-color: #5070A0 !important; }
-[data-testid="stSidebar"] .sb-user { color: #5070A0 !important; -webkit-text-fill-color: #5070A0 !important; }
-[data-testid="stSidebar"] .sb-sep  { background: rgba(46,111,216,0.2) !important; }
-
-[data-testid="stSidebar"] .stRadio > div > label { color: #1A2A42 !important; -webkit-text-fill-color: #1A2A42 !important; background: transparent !important; border: none !important; }
-[data-testid="stSidebar"] .stRadio > div > label:hover { background: rgba(46,111,216,0.1) !important; color: #0F1E36 !important; -webkit-text-fill-color: #0F1E36 !important; }
-[data-testid="stSidebar"] .stRadio > div > label > div:first-child { border-color: #5070A0 !important; }
-
-[data-testid="stSidebar"] [data-testid="stMetric"] { background: #FFFFFF !important; border: 1px solid rgba(46,111,216,0.15) !important; }
-[data-testid="stSidebar"] [data-testid="stMetricValue"] { color: #1A2A42 !important; -webkit-text-fill-color: #1A2A42 !important; }
-[data-testid="stSidebar"] [data-testid="stMetricLabel"] > div { color: #5070A0 !important; -webkit-text-fill-color: #5070A0 !important; }
-
-.page-title { color: #0F1E36 !important; font-weight: 600 !important; }
-.page-sub   { color: #5070A0 !important; }
-.sec-head   { color: #1A2A42 !important; border-color: rgba(46,111,216,0.2) !important; }
-.rule       { background: linear-gradient(90deg, #2E6FD8, rgba(46,111,216,0.15), transparent) !important; }
-h1, h2, h3  { color: #0F1E36 !important; }
-h4, h5, h6  { color: #5070A0 !important; }
-
-p, span, div, label { color: #1A2A42 !important; }
-[data-testid="stWidgetLabel"], [data-testid="stWidgetLabel"] p, [data-testid="stWidgetLabel"] span { color: #5070A0 !important; -webkit-text-fill-color: #5070A0 !important; }
-
-[data-testid="stMetric"] { background: #FFFFFF !important; border: 1px solid rgba(46,111,216,0.15) !important; box-shadow: 0 1px 6px rgba(46,111,216,0.08) !important; }
-[data-testid="stMetricValue"] { color: #1A2A42 !important; -webkit-text-fill-color: #1A2A42 !important; }
-[data-testid="stMetricLabel"] > div { color: #5070A0 !important; -webkit-text-fill-color: #5070A0 !important; }
-
-.stTextInput > div > div > input, .stNumberInput > div > div > input,
-.stTextArea > div > div > textarea, .stDateInput > div > div > input,
-input[type="text"], input[type="number"], input[type="date"], textarea,
-[data-baseweb="input"] input, [data-baseweb="base-input"] input, [data-baseweb="textarea"] textarea {
-    background: #FFFFFF !important; border: 1px solid rgba(46,111,216,0.22) !important;
-    color: #1A2A42 !important; -webkit-text-fill-color: #1A2A42 !important; caret-color: #1A2A42 !important;
+:root {
+    --bg:           #070C18 !important;
+    --bg-2:         #0B1221 !important;
+    --surface:      #0F1A2E !important;
+    --surface-2:    #152238 !important;
+    --blue:         #4D8AE8 !important;
+    --blue-soft:    #6BA3F0 !important;
+    --blue-pale:    #A8C4F0 !important;
+    --blue-glow:    rgba(77,138,232,0.15) !important;
+    --text:         #E8EEF8 !important;
+    --text-2:       #C8D4E8 !important;
+    --muted:        #6A84A8 !important;
+    --dim:          #3D5478 !important;
+    --border:       rgba(77,138,232,0.18) !important;
+    --border-hover: rgba(77,138,232,0.42) !important;
+    --shadow-sm:    0 1px 6px rgba(0,0,0,0.4) !important;
+    --shadow:       0 4px 24px rgba(0,0,0,0.5) !important;
+    --shadow-lg:    0 8px 48px rgba(0,0,0,0.65) !important;
 }
-input::placeholder, textarea::placeholder { color: #8AA0C0 !important; -webkit-text-fill-color: #8AA0C0 !important; }
-
-.stSelectbox > div > div, .stSelectbox [data-baseweb="select"] > div, [data-baseweb="select"] > div { background: #FFFFFF !important; border: 1px solid rgba(46,111,216,0.22) !important; }
-[data-baseweb="select"] span, [data-baseweb="select"] div, [class*="singleValue"] { color: #1A2A42 !important; -webkit-text-fill-color: #1A2A42 !important; }
-[data-baseweb="popover"] [data-baseweb="menu"], [data-baseweb="popover"] ul { background: #FFFFFF !important; border: 1px solid rgba(46,111,216,0.18) !important; }
-[data-baseweb="popover"] li, [data-baseweb="popover"] [role="option"] { background: #FFFFFF !important; color: #1A2A42 !important; }
-[data-baseweb="popover"] li:hover, [data-baseweb="popover"] [role="option"]:hover { background: #EDF2FC !important; }
-
-.stButton > button { background: #FFFFFF !important; color: #2E6FD8 !important; border: 1px solid rgba(46,111,216,0.35) !important; }
-.stButton > button:hover { background: #EDF2FC !important; color: #1A56C4 !important; border-color: #2E6FD8 !important; transform: none !important; }
-.stForm button[type="submit"] { background: #2E6FD8 !important; color: #FFFFFF !important; border: none !important; }
-.stForm button[type="submit"]:hover { background: #1A56C4 !important; box-shadow: 0 4px 16px rgba(46,111,216,0.3) !important; }
-.stDownloadButton > button { background: #FFFFFF !important; color: #5070A0 !important; border: 1px solid rgba(46,111,216,0.25) !important; }
-
-.stTabs [data-baseweb="tab-list"] { background: transparent !important; border-bottom: 1px solid rgba(46,111,216,0.18) !important; }
-.stTabs [data-baseweb="tab"] { color: #7090B8 !important; background: transparent !important; }
-.stTabs [aria-selected="true"] { color: #1A2A42 !important; border-bottom-color: #2E6FD8 !important; }
-.stTabs [data-baseweb="tab"]:hover { color: #1A2A42 !important; }
-
-[data-testid="stDataFrame"] th { background: #E8EFF8 !important; color: #5070A0 !important; border-bottom: 1px solid rgba(46,111,216,0.15) !important; }
-[data-testid="stDataFrame"] td { background: #FFFFFF !important; color: #1A2A42 !important; border-bottom: 1px solid rgba(46,111,216,0.06) !important; }
-[data-testid="stDataFrame"] tr:hover td { background: #F0F5FF !important; }
-.stDataFrame { border: 1px solid rgba(46,111,216,0.15) !important; }
-
-.streamlit-expanderHeader { background: #E8EFF8 !important; border: 1px solid rgba(46,111,216,0.18) !important; color: #1A2A42 !important; }
-.streamlit-expanderContent { background: #F2F6FD !important; border: 1px solid rgba(46,111,216,0.12) !important; }
-
-.stRadio > div > label { background: #FFFFFF !important; border: 1px solid rgba(46,111,216,0.22) !important; color: #1A2A42 !important; -webkit-text-fill-color: #1A2A42 !important; }
-.stRadio > div > label:hover { border-color: #2E6FD8 !important; background: #EDF2FC !important; }
-
-.stSuccess { background: rgba(61,154,108,0.1) !important; border: 1px solid rgba(61,154,108,0.3) !important; }
-.stSuccess * { color: #1E6640 !important; }
-.stInfo    { background: rgba(46,111,216,0.08) !important; border: 1px solid rgba(46,111,216,0.25) !important; }
-.stInfo *  { color: #1A3A72 !important; }
-.stWarning { background: rgba(200,160,50,0.1) !important; border: 1px solid rgba(200,160,50,0.3) !important; }
-.stWarning * { color: #7A5800 !important; }
-.stError   { background: rgba(192,80,96,0.1) !important; border: 1px solid rgba(192,80,96,0.3) !important; }
-.stError * { color: #7A1A28 !important; }
-
-[data-testid="stFileUploader"] > div { background: #FFFFFF !important; border: 2px dashed rgba(46,111,216,0.3) !important; color: #1A2A42 !important; }
-[data-testid="stFileUploader"] * { color: #5070A0 !important; }
-
-.stCaption, .stCaption * { color: #5070A0 !important; }
-.badge-gold  { background: rgba(46,111,216,0.12) !important; color: #1A56C4 !important; }
-.badge-green { background: rgba(61,154,108,0.12) !important; color: #1E6640 !important; }
-.badge-red   { background: rgba(192,80,96,0.12)  !important; color: #7A1A28 !important; }
-.badge-muted { background: #DDE5F2 !important; color: #5070A0 !important; }
-.empty       { color: #8AA0C0 !important; }
-.empty-glyph { color: #C0CCE0 !important; }
-.pub-banner  { background: #FFFFFF !important; border-color: rgba(46,111,216,0.2) !important; }
-.pub-banner-title { color: #0F1E36 !important; }
-.pub-banner-sub   { color: #5070A0 !important; }
-.admin-strip-label { color: #8AA0C0 !important; }
+.stApp, .stApp > div, .main, [data-testid="stAppViewContainer"], [data-testid="block-container"] {
+    background: #070C18 !important;
+}
+[data-testid="stSidebar"], [data-testid="stSidebar"] > div { background: #0B1221 !important; }
+[data-testid="stSidebar"] * { color: #E8EEF8 !important; -webkit-text-fill-color: #E8EEF8 !important; }
+p, span, div, label { color: #C8D4E8 !important; }
+h1, h2, h3 { color: #E8EEF8 !important; }
+[data-testid="stMetric"] { background: #0F1A2E !important; }
+[data-testid="stMetricValue"] { color: #E8EEF8 !important; -webkit-text-fill-color: #E8EEF8 !important; }
+input, textarea, [data-baseweb="input"] input, [data-baseweb="base-input"] input {
+    background: #0F1A2E !important; color: #E8EEF8 !important; -webkit-text-fill-color: #E8EEF8 !important;
+}
+.stSelectbox > div > div, .stSelectbox [data-baseweb="select"] > div, [data-baseweb="select"] > div { background: #0F1A2E !important; }
+[data-baseweb="select"] span, [data-baseweb="select"] div, [class*="singleValue"] { color: #E8EEF8 !important; -webkit-text-fill-color: #E8EEF8 !important; }
+[data-baseweb="popover"] [data-baseweb="menu"], [data-baseweb="popover"] ul { background: #0F1A2E !important; }
+[data-baseweb="popover"] li, [data-baseweb="popover"] [role="option"] { background: #0F1A2E !important; color: #E8EEF8 !important; }
+[data-baseweb="popover"] li:hover, [data-baseweb="popover"] [role="option"]:hover { background: #1C2D47 !important; }
+[data-baseweb="calendar"] { background: #0F1A2E !important; }
+[data-baseweb="calendar"] * { color: #E8EEF8 !important; }
+.stDateInput > div, .stDateInput > div > div { background: #0F1A2E !important; }
+[data-testid="stDataFrame"] th { background: #0F1A2E !important; color: #6A84A8 !important; }
+[data-testid="stDataFrame"] td { background: #0B1221 !important; color: #C8D4E8 !important; }
+[data-testid="stDataFrame"] tr:hover td { background: #0F1A2E !important; }
+.stButton > button { background: transparent !important; color: #4D8AE8 !important; border-color: rgba(77,138,232,0.42) !important; }
+.stButton > button:hover { background: rgba(77,138,232,0.14) !important; color: #A8C4F0 !important; }
+.stDownloadButton > button { background: transparent !important; color: #6A84A8 !important; }
+.stTabs [data-baseweb="tab"] { color: #3D5478 !important; }
+.stTabs [aria-selected="true"] { color: #E8EEF8 !important; }
+.streamlit-expanderHeader { background: #0F1A2E !important; color: #6A84A8 !important; border-color: rgba(77,138,232,0.18) !important; }
+.streamlit-expanderContent { background: #0B1221 !important; border-color: rgba(77,138,232,0.18) !important; }
+.stRadio > div > label { background: #0F1A2E !important; color: #6A84A8 !important; border-color: rgba(77,138,232,0.18) !important; }
+.pub-banner { background: linear-gradient(135deg, #0B1221 0%, #0F1A2E 100%) !important; }
+.pub-banner-title { color: #E8EEF8 !important; }
+.bk-card { background: #0F1A2E !important; }
+.bk-header { background: linear-gradient(135deg, #0B1221 0%, #0F1A2E 100%) !important; }
+[data-testid="stWidgetLabel"], [data-testid="stWidgetLabel"] p, [data-testid="stWidgetLabel"] span { color: #C8D4E8 !important; -webkit-text-fill-color: #C8D4E8 !important; }
+.stSuccess { background: rgba(61,154,108,0.12) !important; } .stSuccess * { color: #7ADFA0 !important; }
+.stInfo { background: rgba(77,138,232,0.1) !important; } .stInfo * { color: #A8C4F0 !important; }
+.stWarning { background: rgba(200,160,50,0.1) !important; } .stWarning * { color: #E8C840 !important; }
+.stError { background: rgba(192,80,96,0.1) !important; } .stError * { color: #E08090 !important; }
+[data-testid="stFileUploader"] > div { background: #0F1A2E !important; border-color: rgba(77,138,232,0.3) !important; }
 </style>
 """
 
 def inject_theme():
-    if st.session_state.theme == "light":
-        st.markdown(_LIGHT_CSS, unsafe_allow_html=True)
+    if st.session_state.theme == "dark":
+        st.markdown(_DARK_CSS, unsafe_allow_html=True)
+
+PLOT_LAYOUT = dict(
+    paper_bgcolor="rgba(255,255,255,0)",
+    plot_bgcolor="rgba(255,255,255,0)",
+    font=dict(family="DM Sans", color="#64748B", size=11),
+    title=dict(font=dict(family="DM Serif Display", size=17, color="#0F172A"), pad=dict(b=12), x=0),
+    xaxis=dict(gridcolor="rgba(37,99,235,0.08)", linecolor="rgba(37,99,235,0.15)", tickfont=dict(size=10, color="#64748B"), showgrid=True, zeroline=False),
+    yaxis=dict(gridcolor="rgba(37,99,235,0.08)", linecolor="rgba(37,99,235,0.15)", tickfont=dict(size=10, color="#64748B"), showgrid=True, zeroline=False),
+    legend=dict(bgcolor="rgba(255,255,255,0.92)", bordercolor="rgba(37,99,235,0.15)", borderwidth=1, font=dict(color="#64748B", size=10)),
+    margin=dict(l=12, r=12, t=44, b=12),
+    colorway=["#2563EB","#3B82F6","#059669","#8BACD8","#DC2626","#1D4ED8","#10B981","#0EA5E9"],
+    hoverlabel=dict(bgcolor="rgba(255,255,255,0.97)", bordercolor="rgba(37,99,235,0.3)", font=dict(color="#0F172A", size=11, family="DM Sans"), align="left"),
+    bargap=0.35,
+)
+
+_DARK_PLOT_LAYOUT = dict(
+    paper_bgcolor="rgba(0,0,0,0)",
+    plot_bgcolor="rgba(0,0,0,0)",
+    font=dict(family="DM Sans", color="#3D5478", size=11),
+    title=dict(font=dict(family="DM Serif Display", size=17, color="#C8D4E8"), pad=dict(b=12), x=0),
+    xaxis=dict(gridcolor="rgba(77,138,232,0.08)", linecolor="rgba(77,138,232,0.15)", tickfont=dict(size=10, color="#3D5478"), showgrid=True, zeroline=False),
+    yaxis=dict(gridcolor="rgba(77,138,232,0.08)", linecolor="rgba(77,138,232,0.15)", tickfont=dict(size=10, color="#3D5478"), showgrid=True, zeroline=False),
+    legend=dict(bgcolor="rgba(7,12,24,0.88)", bordercolor="rgba(77,138,232,0.2)", borderwidth=1, font=dict(color="#6A84A8", size=10)),
+    margin=dict(l=12, r=12, t=44, b=12),
+    colorway=["#4D8AE8","#6BA3F0","#7ADFA0","#8BACD8","#E08090","#1A3D80","#3D9A6C","#4A9AC8"],
+    hoverlabel=dict(bgcolor="rgba(7,12,24,0.96)", bordercolor="rgba(77,138,232,0.3)", font=dict(color="#E8EEF8", size=11, family="DM Sans"), align="left"),
+    bargap=0.35,
+)
 
 def get_plot_layout():
     """Return plotly layout dict adjusted for current theme."""
-    if st.session_state.get("theme") == "light":
-        return dict(
-            paper_bgcolor="rgba(255,255,255,0)",
-            plot_bgcolor="rgba(255,255,255,0)",
-            font=dict(family="Jost", color="#5070A0", size=11),
-            title=dict(font=dict(family="Playfair Display", size=17, color="#1A2A42"), pad=dict(b=12), x=0),
-            xaxis=dict(gridcolor="rgba(46,111,216,0.1)", linecolor="rgba(46,111,216,0.2)", tickfont=dict(size=10, color="#5070A0"), showgrid=True, zeroline=False),
-            yaxis=dict(gridcolor="rgba(46,111,216,0.1)", linecolor="rgba(46,111,216,0.2)", tickfont=dict(size=10, color="#5070A0"), showgrid=True, zeroline=False),
-            legend=dict(bgcolor="rgba(255,255,255,0.9)", bordercolor="rgba(46,111,216,0.15)", borderwidth=1, font=dict(color="#5070A0", size=10)),
-            margin=dict(l=12, r=12, t=44, b=12),
-            colorway=["#2E6FD8","#4D8AE8","#3D9A6C","#8BACD8","#C05060","#1A3D80","#7ADFA0","#4A9AC8"],
-            hoverlabel=dict(bgcolor="rgba(255,255,255,0.97)", bordercolor="rgba(46,111,216,0.3)", font=dict(color="#1A2A42", size=11, family="Jost"), align="left"),
-            bargap=0.35,
-        )
+    if st.session_state.get("theme") == "dark":
+        return _DARK_PLOT_LAYOUT
     return PLOT_LAYOUT
-
-PLOT_LAYOUT = dict(
-    paper_bgcolor="rgba(0,0,0,0)",
-    plot_bgcolor="rgba(0,0,0,0)",
-    font=dict(family="Jost", color="#3D5478", size=11),
-    title=dict(font=dict(family="Playfair Display", size=17, color="#C8D4E8"), pad=dict(b=12), x=0),
-    xaxis=dict(gridcolor="rgba(46,111,216,0.08)", linecolor="rgba(46,111,216,0.15)", tickfont=dict(size=10, color="#3D5478"), showgrid=True, zeroline=False),
-    yaxis=dict(gridcolor="rgba(46,111,216,0.08)", linecolor="rgba(46,111,216,0.15)", tickfont=dict(size=10, color="#3D5478"), showgrid=True, zeroline=False),
-    legend=dict(bgcolor="rgba(7,12,24,0.88)", bordercolor="rgba(46,111,216,0.2)", borderwidth=1, font=dict(color="#6A84A8", size=10)),
-    margin=dict(l=12, r=12, t=44, b=12),
-    colorway=["#2E6FD8","#4D8AE8","#7ADFA0","#8BACD8","#E08090","#1A3D80","#3D9A6C","#4A9AC8"],
-    hoverlabel=dict(bgcolor="rgba(7,12,24,0.96)", bordercolor="rgba(46,111,216,0.3)", font=dict(color="#E8EEF8", size=11, family="Jost"), align="left"),
-    bargap=0.35,
-)
 
 def styled_fig(fig, height=340):
     fig.update_layout(**get_plot_layout(), height=height)
@@ -1274,7 +1378,7 @@ def sidebar():
 
         st.markdown("""
         <div class='sb-brand'>
-            <div class='sb-logo'>Vinay</div>
+            <div class='sb-logo' style='font-family:"DM Serif Display",serif'>Vinay</div>
             <div class='sb-mark'>Boutique Manager</div>
         </div>
         """, unsafe_allow_html=True)
@@ -1300,6 +1404,7 @@ def sidebar():
             "Analytics",
             "Reminders & Alerts",
             "Inventory Tracker",
+            "Backup & Restore",
             "Logout",
         ], label_visibility="collapsed")
 
@@ -1891,6 +1996,225 @@ def page_inventory():
                     st.rerun()
 
 # =====================================================
+# BACKUP & RESTORE PAGE
+# =====================================================
+
+def page_backup_restore():
+    # ── Header ────────────────────────────────────────────────────────────
+    st.markdown("""
+    <div class='bk-header'>
+        <span class='bk-header-icon'>🗄️</span>
+        <div class='bk-header-title'>Backup &amp; Restore</div>
+        <div class='bk-header-sub'>Database Checkpoint Management · Vinay Boutique</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ── Last backup timestamp from session state ──────────────────────────
+    last_backup_ts = st.session_state.get("last_backup_ts", None)
+    last_restore_ts = st.session_state.get("last_restore_ts", None)
+
+    # ══════════════════════════════════════════════════════════
+    # ROW 1 — Backup & Restore cards side by side
+    # ══════════════════════════════════════════════════════════
+    col_bk, col_re = st.columns(2, gap="large")
+
+    # ── Backup card ───────────────────────────────────────────────────────
+    with col_bk:
+        st.markdown("""
+        <div class='bk-card' style='animation-delay:0s'>
+            <div class='bk-card-icon bk-icon-blue'>💾</div>
+            <div class='bk-card-title'>Backup Database</div>
+            <div class='bk-card-desc'>
+                Export a complete checkpoint of all sales, customers, and inventory data.
+                Download as Excel for safekeeping or migration.
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.markdown("<br>", unsafe_allow_html=True)
+        df = fetch_all()
+
+        # CSV checkpoint
+        csv_data = df.assign(sale_date=df["sale_date"].astype(str)).to_csv(index=False) if not df.empty else "No data"
+        st.download_button(
+            label="⬇️  Download CSV Checkpoint",
+            data=csv_data,
+            file_name=f"boutique_checkpoint_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+            mime="text/csv",
+            use_container_width=True,
+        )
+        st.caption("Includes all sales, customer, and payment records")
+
+        st.markdown("<div style='height:0.5rem'></div>", unsafe_allow_html=True)
+
+        # Excel checkpoint
+        if not df.empty:
+            excel_data = to_excel(df)
+            ts_str = datetime.now().strftime('%Y%m%d_%H%M%S')
+            st.download_button(
+                label="⬇️  Download Excel Checkpoint",
+                data=excel_data,
+                file_name=f"boutique_checkpoint_{ts_str}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True,
+            )
+            st.caption("Formatted spreadsheet with column headers and styling")
+        else:
+            st.info("No data to export yet.")
+
+        if last_backup_ts:
+            st.markdown(f"<div class='bk-ts'>Last export: {last_backup_ts}</div>", unsafe_allow_html=True)
+
+        if st.button("📋  Record Manual Backup Note", use_container_width=True):
+            ts = datetime.now().strftime("%d %b %Y, %I:%M %p")
+            st.session_state.last_backup_ts = ts
+            st.success(f"✓ Manual backup noted at {ts}")
+            st.rerun()
+
+    # ── Restore card ──────────────────────────────────────────────────────
+    with col_re:
+        st.markdown("""
+        <div class='bk-card' style='animation-delay:0.1s'>
+            <div class='bk-card-icon bk-icon-green'>♻️</div>
+            <div class='bk-card-title'>Restore from Checkpoint</div>
+            <div class='bk-card-desc'>
+                Upload a previously exported CSV checkpoint to restore records.
+                Existing data will be preserved — only new records are added.
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        uploaded = st.file_uploader(
+            "Upload Checkpoint File",
+            type=["csv"],
+            help="Upload a CSV file previously exported from this application",
+            label_visibility="visible",
+        )
+        st.caption("200 MB max · CSV format only")
+
+        if last_restore_ts:
+            st.markdown(
+                f"<span class='bk-status-badge bk-status-ok'>✓ Last restored: {last_restore_ts}</span>",
+                unsafe_allow_html=True,
+            )
+            st.markdown("<br>", unsafe_allow_html=True)
+
+        if uploaded is not None:
+            try:
+                restore_df = pd.read_csv(uploaded)
+                row_count = len(restore_df)
+                col_count = len(restore_df.columns)
+
+                st.markdown(f"""
+                <div class='bk-card' style='animation-delay:0.15s; border-color: rgba(37,99,235,0.3); margin-top:0.8rem'>
+                    <div class='bk-card-title' style='font-size:0.85rem'>📊 File Preview</div>
+                    <div class='bk-card-desc'>
+                        <b>{row_count}</b> records · <b>{col_count}</b> columns detected<br>
+                        Columns: {', '.join(restore_df.columns[:6].tolist())}{' …' if col_count > 6 else ''}
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+
+                st.dataframe(restore_df.head(5), use_container_width=True, hide_index=True)
+
+                st.warning(
+                    "⚠️  This will **insert** records from the checkpoint into the live database. "
+                    "Duplicate entries may result if records already exist.",
+                )
+
+                confirm = st.checkbox("I understand — proceed with restore")
+                if confirm:
+                    if st.button("🔄  Restore Database from Checkpoint", use_container_width=True):
+                        progress_placeholder = st.empty()
+                        progress_placeholder.markdown(
+                            "<div style='background:var(--bg-2);border-radius:999px;overflow:hidden;height:6px;margin:0.5rem 0'>"
+                            "<div class='bk-progress-bar'></div></div>",
+                            unsafe_allow_html=True,
+                        )
+                        status_msg = st.empty()
+                        status_msg.info("Restoring records…")
+
+                        # ── Actual restore logic ──────────────────────────
+                        inserted = 0
+                        skipped  = 0
+                        errors   = []
+
+                        required_cols = {"customer_name", "selling_price"}
+                        if not required_cols.issubset(set(restore_df.columns)):
+                            progress_placeholder.empty()
+                            status_msg.empty()
+                            st.error(
+                                f"Invalid checkpoint file. Required columns missing: "
+                                f"{required_cols - set(restore_df.columns)}"
+                            )
+                        else:
+                            for _, row in restore_df.iterrows():
+                                try:
+                                    doc = row.dropna().to_dict()
+                                    # Normalise types
+                                    for num_col in ["buying_price","selling_price","amount_paid","pending_amount","quantity"]:
+                                        if num_col in doc:
+                                            doc[num_col] = float(doc[num_col])
+                                    for int_col in ["payment_received","delay_status"]:
+                                        if int_col in doc:
+                                            doc[int_col] = int(doc[int_col])
+                                    # Assign a new unique ID
+                                    doc["id"]         = get_next_id()
+                                    doc["restored_at"] = str(datetime.now())
+                                    get_col().insert_one(doc)
+                                    inserted += 1
+                                except Exception as e:
+                                    skipped += 1
+                                    errors.append(str(e))
+
+                            invalidate_cache()
+                            progress_placeholder.empty()
+                            status_msg.empty()
+                            ts = datetime.now().strftime("%d %b %Y, %I:%M %p")
+                            st.session_state.last_restore_ts = ts
+
+                            if inserted > 0:
+                                st.success(
+                                    f"✅  Restore complete — **{inserted}** records inserted"
+                                    + (f", {skipped} skipped." if skipped else ".")
+                                )
+                            if errors:
+                                with st.expander(f"⚠️  {len(errors)} row(s) had errors"):
+                                    for err in errors[:10]:
+                                        st.caption(err)
+                            st.rerun()
+
+            except Exception as e:
+                st.error(f"Could not read file: {e}")
+
+    # ══════════════════════════════════════════════════════════
+    # ROW 2 — Database stats card
+    # ══════════════════════════════════════════════════════════
+    rule()
+    st.markdown("""
+    <div class='bk-card' style='animation-delay:0.2s'>
+        <div class='bk-card-title'>📈  Current Database Status</div>
+        <div class='bk-card-desc'>Live snapshot of records in the database</div>
+    </div>
+    """, unsafe_allow_html=True)
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    df2 = fetch_all()
+    m = metrics(df2)
+    c1, c2, c3, c4, c5 = st.columns(5)
+    c1.metric("Total Records",  m["sales"])
+    c2.metric("Total Revenue",  f"₹{m['revenue']:,.0f}")
+    c3.metric("Unique Customers", m["customers"])
+    c4.metric("Pending Payments", f"₹{m['pending']:,.0f}")
+    c5.metric("Data Health",    "✓ Live" if m["sales"] > 0 else "Empty")
+
+    rule_sm()
+    st.caption(f"Database last queried: {datetime.now().strftime('%d %b %Y, %I:%M:%S %p')}  ·  Boutique Manager v2.0")
+
+
+# =====================================================
 # MAIN
 # =====================================================
 
@@ -1898,7 +2222,7 @@ def main():
     if "logged_in" not in st.session_state:
         st.session_state.logged_in = False
     if "theme" not in st.session_state:
-        st.session_state.theme = "dark"
+        st.session_state.theme = "light"
 
     # Apply light mode CSS overrides if needed
     inject_theme()
@@ -1918,6 +2242,7 @@ def main():
     elif "Analytics"   in page: page_analytics()
     elif "Reminders"   in page: page_reminders()
     elif "Inventory"   in page: page_inventory()
+    elif "Backup"      in page: page_backup_restore()
     elif "Logout"      in page:
         st.session_state.logged_in = False
         st.session_state.username  = None
