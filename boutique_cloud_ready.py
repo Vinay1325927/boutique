@@ -55,6 +55,81 @@ st.markdown("""
     --shadow-lg:    0 8px 48px rgba(0,0,0,0.65);
 }
 
+/* ━━━ LIGHT MODE OVERRIDES ━━━ */
+body[data-theme="light"] {
+    --navy-1:       #F4F7FC;
+    --navy-2:       #EAEFF8;
+    --navy-3:       #FFFFFF;
+    --navy-4:       #DDE5F2;
+    --navy-5:       #C8D4E8;
+    --blue:         #2E6FD8;
+    --blue-soft:    #1A56C4;
+    --blue-pale:    #1A3D80;
+    --cream:        #1A2A42;
+    --cream-dim:    #2C4268;
+    --muted:        #4A6080;
+    --dim:          #7090B8;
+    --border:       rgba(46,111,216,0.22);
+    --border-hover: rgba(46,111,216,0.5);
+    --shadow:       0 2px 24px rgba(0,0,0,0.12);
+}
+body[data-theme="light"] .stApp {
+    background: #F4F7FC !important;
+    background-image:
+        radial-gradient(ellipse 900px 600px at 0% 0%, rgba(46,111,216,0.05) 0%, transparent 70%),
+        radial-gradient(ellipse 700px 500px at 100% 100%, rgba(46,111,216,0.04) 0%, transparent 70%) !important;
+}
+body[data-theme="light"] html, body[data-theme="light"] [class*="css"] {
+    background: #F4F7FC !important;
+    color: #1A2A42 !important;
+}
+body[data-theme="light"] input:not([type="radio"]):not([type="checkbox"]),
+body[data-theme="light"] textarea,
+body[data-theme="light"] [data-baseweb="input"] input,
+body[data-theme="light"] [data-baseweb="base-input"] input,
+body[data-theme="light"] [data-baseweb="textarea"] textarea {
+    color: #1A2A42 !important;
+    -webkit-text-fill-color: #1A2A42 !important;
+    caret-color: #1A2A42 !important;
+    background-color: #FFFFFF !important;
+}
+body[data-theme="light"] [data-testid="stSidebar"] {
+    background: #EAEFF8 !important;
+}
+body[data-theme="light"] [data-testid="stSidebar"] * { color: #1A2A42 !important; }
+body[data-theme="light"] h1, body[data-theme="light"] h2, body[data-theme="light"] h3 {
+    color: #1A2A42 !important;
+}
+
+/* ━━━ THEME TOGGLE BUTTON ━━━ */
+#theme-toggle-btn {
+    position: fixed;
+    top: 14px;
+    right: 18px;
+    z-index: 9999;
+    background: var(--navy-3);
+    border: 1px solid var(--border);
+    border-radius: 50px;
+    padding: 6px 14px;
+    cursor: pointer;
+    font-family: 'Jost', sans-serif;
+    font-size: 0.75rem;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.25s ease;
+    box-shadow: var(--shadow);
+}
+#theme-toggle-btn:hover {
+    border-color: var(--border-hover);
+    color: var(--cream);
+    transform: translateY(-1px);
+}
+#theme-toggle-icon { font-size: 0.9rem; }
+
 html, body, [class*="css"] {
     font-family: 'Jost', sans-serif !important;
     background: var(--navy-1) !important;
@@ -169,7 +244,10 @@ h4, h5, h6 {
     color: var(--dim);
     margin-top: 0.3rem;
 }
-[data-testid="stSidebar"] .stRadio > div { gap: 2px !important; }
+[data-testid="stSidebar"] .stRadio > div {
+    gap: 2px !important;
+    flex-direction: column !important;
+}
 [data-testid="stSidebar"] .stRadio > div > label {
     background: transparent !important;
     border: none !important;
@@ -188,7 +266,19 @@ h4, h5, h6 {
     background: rgba(46,111,216,0.12) !important;
     color: var(--cream) !important;
 }
-[data-testid="stSidebar"] .stRadio > div > label > div:first-child { display: none !important; }
+[data-testid="stSidebar"] .stRadio > div > label > div:first-child {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 16px !important;
+    height: 16px !important;
+    min-width: 16px !important;
+    border: 2px solid var(--dim) !important;
+    border-radius: 50% !important;
+    margin-right: 8px !important;
+    background: transparent !important;
+    transition: all 0.2s !important;
+}
 .sb-user {
     font-size: 0.75rem;
     color: var(--dim);
@@ -519,7 +609,7 @@ input[type="text"], input[type="number"], input[type="date"], textarea {
     border-radius: var(--r) !important;
 }
 
-/* ━━━ RADIO (inline) ━━━ */
+/* ━━━ RADIO (inline - non-sidebar) ━━━ */
 .stRadio > div { gap: 0.5rem !important; flex-direction: row !important; }
 .stRadio > div > label {
     background: var(--navy-3) !important;
@@ -597,8 +687,44 @@ button[data-testid="stNumberInputStepUp"] {
 </style>
 """, unsafe_allow_html=True)
 
-# =====================================================
-# PLOTLY TEMPLATE
+# ── THEME TOGGLE BUTTON ─────────────────────────────────────────────────────
+st.markdown("""
+<button id="theme-toggle-btn" onclick="toggleTheme()">
+    <span id="theme-toggle-icon">☀️</span>
+    <span id="theme-toggle-label">Light Mode</span>
+</button>
+<script>
+(function() {
+    var saved = localStorage.getItem('vinay_theme') || 'dark';
+    applyTheme(saved);
+
+    function applyTheme(t) {
+        document.body.setAttribute('data-theme', t);
+        var ico = document.getElementById('theme-toggle-icon');
+        var lbl = document.getElementById('theme-toggle-label');
+        if (t === 'light') {
+            if(ico) ico.textContent = '🌙';
+            if(lbl) lbl.textContent = 'Dark Mode';
+        } else {
+            if(ico) ico.textContent = '☀️';
+            if(lbl) lbl.textContent = 'Light Mode';
+        }
+        localStorage.setItem('vinay_theme', t);
+    }
+
+    window.toggleTheme = function() {
+        var cur = document.body.getAttribute('data-theme') || 'dark';
+        applyTheme(cur === 'dark' ? 'light' : 'dark');
+    };
+
+    var obs = new MutationObserver(function() {
+        var t = localStorage.getItem('vinay_theme') || 'dark';
+        if (document.body.getAttribute('data-theme') !== t) applyTheme(t);
+    });
+    obs.observe(document.body, { childList: true, subtree: false });
+})();
+</script>
+""", unsafe_allow_html=True)
 # =====================================================
 
 PLOT_LAYOUT = dict(
@@ -980,10 +1106,72 @@ def sidebar():
             f"<div class='sb-user'>◆ {st.session_state.get('username','Admin').title()}</div>",
             unsafe_allow_html=True,
         )
-    return nav
 
-# =====================================================
-# ADMIN PAGES
+        # ── EXCEL UPLOAD ──────────────────────────────────────────────────
+        st.markdown("<div class='sb-sep'></div>", unsafe_allow_html=True)
+        with st.expander("📤 Upload Sales Data (Excel)"):
+            xfile = st.file_uploader("Upload .xlsx file", type=["xlsx"], key="excel_upload")
+            if xfile is not None:
+                try:
+                    xdf = pd.read_excel(xfile)
+                    # Normalize column names to match internal schema
+                    col_map = {
+                        "Id": "id", "Customer Name": "customer_name",
+                        "Customer Phone": "customer_phone", "Sale Date": "sale_date",
+                        "Product Category": "product_category",
+                        "Product Description": "product_description",
+                        "Vendor": "vendor", "Buying Price": "buying_price",
+                        "Selling Price": "selling_price", "Profit": "profit",
+                        "Profit Margin %": "margin", "Amount Paid": "amount_paid",
+                        "Pending Amount": "pending_amount",
+                        "Payment Status": "payment_status", "Delayed": "delay_status",
+                        "Payment Method": "payment_method", "Notes": "notes",
+                        "Created At": "created_at",
+                    }
+                    xdf.rename(columns=col_map, inplace=True)
+                    st.info(f"Found **{len(xdf)}** rows in uploaded file.")
+
+                    if st.button("Import & Deduplicate", use_container_width=True, key="import_btn"):
+                        col = get_col()
+                        existing_ids = set(
+                            doc["id"] for doc in col.find({}, {"_id": 0, "id": 1}) if "id" in doc
+                        )
+                        inserted, skipped = 0, 0
+                        for _, row in xdf.iterrows():
+                            rid = row.get("id")
+                            if pd.notna(rid) and int(rid) in existing_ids:
+                                skipped += 1
+                                continue
+                            rec = {k: (None if pd.isna(v) else v) for k, v in row.items()}
+                            # Convert numeric id
+                            if "id" in rec and rec["id"] is not None:
+                                rec["id"] = int(rec["id"])
+                            # Map delay_status
+                            ds = rec.get("delay_status", "No")
+                            rec["delay_status"] = 1 if str(ds).strip().lower() in ("yes","1","true") else 0
+                            # Map payment_received
+                            ps = rec.get("payment_status", "Pending")
+                            rec["payment_received"] = 1 if str(ps).strip().lower() in ("received","paid","1") else 0
+                            # Ensure numeric fields
+                            for f in ["buying_price","selling_price","amount_paid","pending_amount"]:
+                                try: rec[f] = float(rec.get(f) or 0)
+                                except: rec[f] = 0.0
+                            # Convert sale_date
+                            sd = rec.get("sale_date")
+                            if sd is not None and not isinstance(sd, str):
+                                try: rec["sale_date"] = str(pd.Timestamp(sd).date())
+                                except: rec["sale_date"] = str(sd)
+                            col.insert_one(rec)
+                            if rid is not None:
+                                existing_ids.add(int(rid))
+                            inserted += 1
+                        invalidate_cache()
+                        st.success(f"✓ Imported {inserted} rows. Skipped {skipped} duplicates.")
+                        st.rerun()
+                except Exception as ex:
+                    st.error(f"Error reading file: {ex}")
+
+    return nav
 # =====================================================
 
 def page_dashboard():
