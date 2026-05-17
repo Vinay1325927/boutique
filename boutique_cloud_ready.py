@@ -2141,6 +2141,41 @@ def page_backup_restore():
                         skipped  = 0
                         errors   = []
 
+                        # ── Column name normalisation ─────────────────────
+                        # The app exports title-cased columns (e.g. "Customer Name")
+                        # but internally uses snake_case (e.g. "customer_name").
+                        # Build a mapping: title-cased export name → internal name.
+                        EXPORT_TO_INTERNAL = {
+                            "Id":                  "id",
+                            "Customer Name":       "customer_name",
+                            "Customer Phone":      "customer_phone",
+                            "Sale Date":           "sale_date",
+                            "Product Category":    "product_category",
+                            "Product Description": "product_description",
+                            "Vendor":              "vendor",
+                            "Buying Price":        "buying_price",
+                            "Selling Price":       "selling_price",
+                            "Profit":              "profit",
+                            "Profit Margin %":     "margin",
+                            "Amount Paid":         "amount_paid",
+                            "Pending Amount":      "pending_amount",
+                            "Payment Status":      "_payment_status_str",  # converted below
+                            "Status":              "_payment_status_str",
+                            "Delayed":             "_delayed_str",          # converted below
+                            "Payment Method":      "payment_method",
+                            "Notes":               "notes",
+                            "Created At":          "created_at",
+                        }
+                        # Rename columns that match the export format; leave unknown ones as-is
+                        restore_df = restore_df.rename(
+                            columns={k: v for k, v in EXPORT_TO_INTERNAL.items() if k in restore_df.columns}
+                        )
+                        # Also lowercase any remaining columns that weren't renamed
+                        restore_df.columns = [
+                            c.lower().replace(" ", "_") if c not in restore_df.columns else c
+                            for c in restore_df.columns
+                        ]
+
                         required_cols = {"customer_name", "selling_price"}
                         if not required_cols.issubset(set(restore_df.columns)):
                             progress_placeholder.empty()
@@ -2153,15 +2188,40 @@ def page_backup_restore():
                             for _, row in restore_df.iterrows():
                                 try:
                                     doc = row.dropna().to_dict()
-                                    # Normalise types
-                                    for num_col in ["buying_price","selling_price","amount_paid","pending_amount","quantity"]:
+
+                                    # Convert "Payment Status" string → payment_received int
+                                    if "_payment_status_str" in doc:
+                                        ps = str(doc.pop("_payment_status_str")).strip().lower()
+                                        doc["payment_received"] = 1 if ps in ("paid", "received", "1") else 0
+
+                                    # Convert "Delayed" string → delay_status int
+                                    if "_delayed_str" in doc:
+                                        dl = str(doc.pop("_delayed_str")).strip().lower()
+                                        doc["delay_status"] = 1 if dl in ("yes", "true", "1") else 0
+
+                                    # Derive payment_received from pending_amount if not set
+                                    if "payment_received" not in doc:
+                                        pending = float(doc.get("pending_amount", 0) or 0)
+                                        doc["payment_received"] = 0 if pending > 0 else 1
+
+                                    # Default delay_status
+                                    if "delay_status" not in doc:
+                                        doc["delay_status"] = 0
+
+                                    # Normalise numeric types
+                                    for num_col in ["buying_price", "selling_price", "amount_paid", "pending_amount", "quantity", "profit", "margin"]:
                                         if num_col in doc:
-                                            doc[num_col] = float(doc[num_col])
-                                    for int_col in ["payment_received","delay_status"]:
+                                            try:
+                                                doc[num_col] = float(doc[num_col])
+                                            except (ValueError, TypeError):
+                                                doc.pop(num_col, None)
+                                    for int_col in ["payment_received", "delay_status"]:
                                         if int_col in doc:
                                             doc[int_col] = int(doc[int_col])
-                                    # Assign a new unique ID
-                                    doc["id"]         = get_next_id()
+
+                                    # Drop the old exported id — assign a fresh one
+                                    doc.pop("id", None)
+                                    doc["id"]          = get_next_id()
                                     doc["restored_at"] = str(datetime.now())
                                     get_col().insert_one(doc)
                                     inserted += 1
