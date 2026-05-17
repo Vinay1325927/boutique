@@ -6,9 +6,27 @@ import plotly.express as px
 import plotly.graph_objects as go
 from io import BytesIO
 import os
+import time
+import hmac
+import hashlib
+from html import escape as html_escape
+import bcrypt
 from dotenv import load_dotenv
 
 load_dotenv("credentials/.env")
+
+# =====================================================
+# PASSWORD HASH UTILITY
+# Run once in a Python shell to generate your hash:
+#
+#   import bcrypt
+#   h = bcrypt.hashpw(b"your_password_here", bcrypt.gensalt())
+#   print(h.decode())
+#
+# Then set PASSWORD_HASH=<output> in credentials/.env
+# or in your Streamlit secrets.toml as:
+#   PASSWORD_HASH = "<output>"
+# =====================================================
 
 # =====================================================
 # PAGE CONFIG
@@ -53,25 +71,6 @@ st.markdown("""
     --border-hover: rgba(46,111,216,0.42);
     --shadow:       0 2px 24px rgba(0,0,0,0.5);
     --shadow-lg:    0 8px 48px rgba(0,0,0,0.65);
-}
-
-/* ━━━ SIDEBAR THEME TOGGLE ━━━ */
-[data-testid="stSidebar"] > div:first-child > div:first-child .stButton > button {
-    background: transparent !important;
-    border: 1px solid var(--border) !important;
-    color: var(--muted) !important;
-    font-size: 0.7rem !important;
-    padding: 0.3rem 0.8rem !important;
-    letter-spacing: 0.08em !important;
-    width: auto !important;
-    float: right;
-    margin-bottom: 0.5rem;
-}
-[data-testid="stSidebar"] > div:first-child > div:first-child .stButton > button:hover {
-    border-color: var(--border-hover) !important;
-    color: var(--cream) !important;
-    transform: none !important;
-    background: rgba(46,111,216,0.1) !important;
 }
 
 html, body, [class*="css"] {
@@ -188,10 +187,7 @@ h4, h5, h6 {
     color: var(--dim);
     margin-top: 0.3rem;
 }
-[data-testid="stSidebar"] .stRadio > div {
-    gap: 2px !important;
-    flex-direction: column !important;
-}
+[data-testid="stSidebar"] .stRadio > div { gap: 2px !important; }
 [data-testid="stSidebar"] .stRadio > div > label {
     background: transparent !important;
     border: none !important;
@@ -210,19 +206,7 @@ h4, h5, h6 {
     background: rgba(46,111,216,0.12) !important;
     color: var(--cream) !important;
 }
-[data-testid="stSidebar"] .stRadio > div > label > div:first-child {
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    width: 16px !important;
-    height: 16px !important;
-    min-width: 16px !important;
-    border: 2px solid var(--dim) !important;
-    border-radius: 50% !important;
-    margin-right: 8px !important;
-    background: transparent !important;
-    transition: all 0.2s !important;
-}
+[data-testid="stSidebar"] .stRadio > div > label > div:first-child { display: none !important; }
 .sb-user {
     font-size: 0.75rem;
     color: var(--dim);
@@ -553,7 +537,7 @@ input[type="text"], input[type="number"], input[type="date"], textarea {
     border-radius: var(--r) !important;
 }
 
-/* ━━━ RADIO (inline - non-sidebar) ━━━ */
+/* ━━━ RADIO (inline) ━━━ */
 .stRadio > div { gap: 0.5rem !important; flex-direction: row !important; }
 .stRadio > div > label {
     background: var(--navy-3) !important;
@@ -631,128 +615,9 @@ button[data-testid="stNumberInputStepUp"] {
 </style>
 """, unsafe_allow_html=True)
 
-# ── THEME TOGGLE — pure session_state, no JS needed ─────────────────────────
-if "theme" not in st.session_state:
-    st.session_state.theme = "dark"
-
-_LIGHT_CSS = """
-<style>
-/* ━━━ LIGHT MODE — full override ━━━ */
-html, body, [class*="css"], .stApp, section, div {
-    background-color: #F0F4FB !important;
-    color: #1A2A42 !important;
-}
-.stApp {
-    background: #F0F4FB !important;
-    background-image: none !important;
-}
-[data-testid="stSidebar"] {
-    background: #E2EAF6 !important;
-    border-right: 1px solid rgba(46,111,216,0.18) !important;
-}
-[data-testid="stSidebar"] * { color: #1A2A42 !important; }
-[data-testid="stSidebar"] .stRadio > div > label { color: #4A6080 !important; background: transparent !important; }
-[data-testid="stSidebar"] .stRadio > div > label:hover { background: rgba(46,111,216,0.08) !important; color: #1A2A42 !important; }
-.sb-logo { color: #2E6FD8 !important; }
-.sb-mark, .sb-user { color: #7090B8 !important; }
-.sb-sep { background: rgba(46,111,216,0.18) !important; }
-.page-title { color: #1A2A42 !important; }
-.page-sub { color: #7090B8 !important; }
-.sec-head { color: #1A2A42 !important; border-color: rgba(46,111,216,0.22) !important; }
-.rule { background: linear-gradient(90deg, #2E6FD8 0%, rgba(46,111,216,0.2) 60%, transparent 100%) !important; }
-h1,h2,h3 { color: #1A2A42 !important; }
-h4,h5,h6 { color: #4A6080 !important; }
-[data-testid="stMetric"] {
-    background: #FFFFFF !important;
-    border: 1px solid rgba(46,111,216,0.18) !important;
-    box-shadow: 0 1px 8px rgba(0,0,0,0.06) !important;
-}
-[data-testid="stMetricValue"] { color: #1A2A42 !important; }
-[data-testid="stMetricLabel"] > div { color: #4A6080 !important; }
-.stTextInput > div > div > input,
-.stNumberInput > div > div > input,
-.stTextArea > div > div > textarea,
-.stDateInput > div > div > input,
-input[type="text"], input[type="number"], input[type="date"], textarea {
-    background: #FFFFFF !important;
-    border: 1px solid rgba(46,111,216,0.25) !important;
-    color: #1A2A42 !important;
-    -webkit-text-fill-color: #1A2A42 !important;
-}
-.stSelectbox > div > div,
-.stSelectbox [data-baseweb="select"] > div {
-    background: #FFFFFF !important;
-    border: 1px solid rgba(46,111,216,0.25) !important;
-    color: #1A2A42 !important;
-}
-.stSelectbox [data-baseweb="select"] span,
-.stSelectbox [data-baseweb="select"] div { color: #1A2A42 !important; }
-[data-baseweb="popover"] [data-baseweb="menu"], [data-baseweb="popover"] ul {
-    background: #FFFFFF !important; border: 1px solid rgba(46,111,216,0.2) !important;
-}
-[data-baseweb="popover"] li, [data-baseweb="popover"] [role="option"] {
-    background: #FFFFFF !important; color: #1A2A42 !important;
-}
-[data-baseweb="popover"] li:hover, [data-baseweb="popover"] [role="option"]:hover {
-    background: #EFF3FA !important;
-}
-.stButton > button {
-    background: transparent !important;
-    color: #2E6FD8 !important;
-    border: 1px solid rgba(46,111,216,0.4) !important;
-}
-.stButton > button:hover {
-    background: rgba(46,111,216,0.08) !important;
-    color: #1A56C4 !important;
-}
-.stForm button[type="submit"] {
-    background: #2E6FD8 !important;
-    color: #FFFFFF !important;
-}
-.stDownloadButton > button {
-    color: #4A6080 !important;
-    border: 1px solid rgba(46,111,216,0.25) !important;
-}
-.stTabs [data-baseweb="tab-list"] { border-bottom: 1px solid rgba(46,111,216,0.2) !important; }
-.stTabs [data-baseweb="tab"] { color: #7090B8 !important; }
-.stTabs [aria-selected="true"] { color: #1A2A42 !important; border-bottom-color: #2E6FD8 !important; }
-[data-testid="stDataFrame"] th { background: #EFF3FA !important; color: #4A6080 !important; border-bottom: 1px solid rgba(46,111,216,0.15) !important; }
-[data-testid="stDataFrame"] td { background: #FFFFFF !important; color: #1A2A42 !important; border-bottom: 1px solid rgba(46,111,216,0.06) !important; }
-[data-testid="stDataFrame"] tr:hover td { background: #F5F8FF !important; }
-.stDataFrame { border: 1px solid rgba(46,111,216,0.18) !important; }
-.streamlit-expanderHeader {
-    background: #EFF3FA !important;
-    border: 1px solid rgba(46,111,216,0.18) !important;
-    color: #4A6080 !important;
-}
-.streamlit-expanderContent {
-    background: #F5F8FF !important;
-    border: 1px solid rgba(46,111,216,0.12) !important;
-}
-.stRadio > div > label {
-    background: #FFFFFF !important;
-    border: 1px solid rgba(46,111,216,0.22) !important;
-    color: #4A6080 !important;
-}
-.stRadio > div > label:hover { border-color: rgba(46,111,216,0.5) !important; color: #1A2A42 !important; }
-.stSuccess { background: rgba(61,154,108,0.1) !important; border: 1px solid rgba(61,154,108,0.3) !important; color: #2A7A50 !important; }
-.stInfo    { background: rgba(46,111,216,0.08) !important; border: 1px solid rgba(46,111,216,0.25) !important; }
-.stWarning { background: rgba(200,160,50,0.08) !important; border: 1px solid rgba(200,160,50,0.25) !important; }
-.stError   { background: rgba(192,80,96,0.08)  !important; border: 1px solid rgba(192,80,96,0.22)  !important; }
-[data-testid="stWidgetLabel"], [data-testid="stWidgetLabel"] p,
-[data-testid="stWidgetLabel"] span { color: #4A6080 !important; -webkit-text-fill-color: #4A6080 !important; }
-input::placeholder, textarea::placeholder { color: #9AADC8 !important; -webkit-text-fill-color: #9AADC8 !important; }
-.badge-gold  { background: rgba(46,111,216,0.12); color: #1A56C4; }
-.badge-green { background: rgba(61,154,108,0.12); color: #2A7A50; }
-.badge-muted { background: #DDE5F2; color: #4A6080; }
-.empty { color: #9AADC8 !important; }
-.admin-strip-label { color: #C8D4E8 !important; }
-</style>
-"""
-
-def inject_theme():
-    if st.session_state.theme == "light":
-        st.markdown(_LIGHT_CSS, unsafe_allow_html=True)
+# =====================================================
+# PLOTLY TEMPLATE
+# =====================================================
 
 PLOT_LAYOUT = dict(
     paper_bgcolor="rgba(0,0,0,0)",
@@ -915,11 +780,11 @@ def get_existing_customers_with_phone():
 # =====================================================
 
 def page_header(title, sub):
-    st.markdown(f"<div class='page-title'>{title}</div>", unsafe_allow_html=True)
-    st.markdown(f"<div class='page-sub'>{sub}</div>", unsafe_allow_html=True)
+    st.markdown(f"<div class='page-title'>{html_escape(title)}</div>", unsafe_allow_html=True)
+    st.markdown(f"<div class='page-sub'>{html_escape(sub)}</div>", unsafe_allow_html=True)
 
 def sec(label):
-    st.markdown(f"<div class='sec-head'>{label}</div>", unsafe_allow_html=True)
+    st.markdown(f"<div class='sec-head'>{html_escape(label)}</div>", unsafe_allow_html=True)
 
 def rule():
     st.markdown("<hr class='rule'>", unsafe_allow_html=True)
@@ -1025,7 +890,31 @@ def page_add_sale(public=False):
         submitted = st.form_submit_button("Save Sale", use_container_width=True)
 
         if submitted:
+            # ── Public form rate limiting ────────────────────────────────
+            if public:
+                now = time.time()
+                window_start = st.session_state.get("pub_window_start", now)
+                pub_count    = st.session_state.get("pub_submit_count", 0)
+                # Reset counter every 60 seconds
+                if now - window_start > 60:
+                    st.session_state.pub_window_start  = now
+                    st.session_state.pub_submit_count  = 0
+                    pub_count = 0
+                pub_count += 1
+                st.session_state.pub_submit_count = pub_count
+                if pub_count > 5:
+                    st.error("Too many submissions. Please wait a minute before trying again.")
+                    st.stop()
+
+            # ── Input length guards ──────────────────────────────────────
+            MAX = {"name": 120, "phone": 20, "vendor": 100, "desc": 500, "notes": 500}
             errs = []
+            if len(cname) > MAX["name"]:   errs.append(f"Customer name must be under {MAX['name']} characters.")
+            if len(cphone) > MAX["phone"]:  errs.append(f"Phone number must be under {MAX['phone']} characters.")
+            if len(vend) > MAX["vendor"]:   errs.append(f"Vendor name must be under {MAX['vendor']} characters.")
+            if len(desc) > MAX["desc"]:     errs.append(f"Description must be under {MAX['desc']} characters.")
+            if len(notes) > MAX["notes"]:   errs.append(f"Notes must be under {MAX['notes']} characters.")
+
             if not cname.strip():  errs.append("Customer name is required.")
             if buy  <= 0:          errs.append("Buying price must be > 0.")
             if sell <= 0:          errs.append("Selling price must be > 0.")
@@ -1038,12 +927,12 @@ def page_add_sale(public=False):
             else:
                 get_col().insert_one({
                     "id":                  get_next_id(),
-                    "customer_name":       cname.strip(),
-                    "customer_phone":      cphone.strip(),
+                    "customer_name":       cname.strip()[:120],
+                    "customer_phone":      cphone.strip()[:20],
                     "sale_date":           str(sdate),
-                    "vendor":              vend.strip(),
+                    "vendor":              vend.strip()[:100],
                     "product_category":    cat,
-                    "product_description": desc.strip(),
+                    "product_description": desc.strip()[:500],
                     "quantity":            qty,
                     "buying_price":        round(buy, 2),
                     "selling_price":       round(sell, 2),
@@ -1052,13 +941,103 @@ def page_add_sale(public=False):
                     "payment_received":    1 if pending_amt == 0 else 0,
                     "delay_status":        0,
                     "payment_method":      pm,
-                    "notes":               notes.strip(),
+                    "notes":               notes.strip()[:500],
                     "created_at":          str(datetime.now()),
                 })
                 invalidate_cache()
                 st.success(f"✓ Sale recorded for {cname.strip()}.")
                 st.balloons()
                 st.rerun()
+
+# =====================================================
+# AUTH HELPERS
+# =====================================================
+
+_MAX_ATTEMPTS   = 5
+_LOCKOUT_SECS   = 300   # 5-minute lockout after max attempts
+_BACKOFF_BASE   = 1.5   # seconds — doubles each attempt after 1st failure
+
+def _get_stored_hash() -> bytes | None:
+    """
+    Return the bcrypt hash of the admin password.
+
+    Priority:
+      1. st.secrets["PASSWORD_HASH"]  — a bcrypt hash (preferred for production)
+      2. st.secrets["PASSWORD"]       — plain text, hashed on the fly (migration path)
+      3. env var PASSWORD_HASH        — bcrypt hash
+      4. env var PASSWORD             — plain text, hashed on the fly
+
+    If none of these are set the function returns None and login is blocked.
+    """
+    try:
+        secrets = st.secrets
+    except Exception:
+        secrets = {}
+
+    # 1. Pre-hashed secret
+    h = secrets.get("PASSWORD_HASH") or os.getenv("PASSWORD_HASH", "")
+    if h:
+        return h.encode() if isinstance(h, str) else h
+
+    # 2. Plain-text secret — hash on the fly (one-time cost per cold start)
+    p = secrets.get("PASSWORD") or os.getenv("PASSWORD", "")
+    if p:
+        return bcrypt.hashpw(p.encode(), bcrypt.gensalt())
+
+    # Nothing configured — fail closed
+    return None
+
+
+def _get_username() -> str | None:
+    try:
+        u = st.secrets.get("USERNAME") or os.getenv("USERNAME", "")
+    except Exception:
+        u = os.getenv("USERNAME", "")
+    return u.strip() or None
+
+
+def _check_lockout() -> tuple[bool, int]:
+    """Returns (is_locked, seconds_remaining)."""
+    attempts  = st.session_state.get("login_attempts", 0)
+    lock_time = st.session_state.get("login_lock_until", 0)
+    now       = time.time()
+    if lock_time and now < lock_time:
+        return True, int(lock_time - now)
+    if lock_time and now >= lock_time:
+        # Reset after lockout expires
+        st.session_state.login_attempts   = 0
+        st.session_state.login_lock_until = 0
+    return False, 0
+
+
+def _record_failure():
+    attempts = st.session_state.get("login_attempts", 0) + 1
+    st.session_state.login_attempts = attempts
+    if attempts >= _MAX_ATTEMPTS:
+        st.session_state.login_lock_until = time.time() + _LOCKOUT_SECS
+    else:
+        # Progressive back-off delay (no await needed — this is server-side Streamlit)
+        delay = _BACKOFF_BASE * (2 ** (attempts - 1))
+        time.sleep(min(delay, 30))
+
+
+def _verify_credentials(username: str, password: str) -> bool:
+    stored_user = _get_username()
+    stored_hash = _get_stored_hash()
+
+    if stored_user is None or stored_hash is None:
+        return False
+
+    # Constant-time username compare
+    user_ok = hmac.compare_digest(username.encode(), stored_user.encode())
+    # bcrypt compare (constant-time internally)
+    try:
+        pass_ok = bcrypt.checkpw(password.encode(), stored_hash)
+    except Exception:
+        pass_ok = False
+
+    return user_ok and pass_ok
+
 
 # =====================================================
 # ADMIN LOGIN
@@ -1068,26 +1047,47 @@ def render_admin_login_strip():
     st.markdown("<div class='admin-strip'>", unsafe_allow_html=True)
     st.markdown("<div class='admin-strip-label'>◆ Admin Access</div>", unsafe_allow_html=True)
 
+    # Credential config check (fail closed if nothing set)
+    if _get_stored_hash() is None or _get_username() is None:
+        with st.expander("Sign in to Admin Dashboard", expanded=False):
+            st.error(
+                "Admin credentials are not configured. "
+                "Set USERNAME and PASSWORD (or PASSWORD_HASH) in st.secrets or environment variables."
+            )
+        st.markdown("</div>", unsafe_allow_html=True)
+        return
+
     with st.expander("Sign in to Admin Dashboard", expanded=False):
+        locked, secs_left = _check_lockout()
+        if locked:
+            st.error(f"Too many failed attempts. Try again in {secs_left // 60}m {secs_left % 60}s.")
+            st.markdown("</div>", unsafe_allow_html=True)
+            return
+
+        attempts_left = _MAX_ATTEMPTS - st.session_state.get("login_attempts", 0)
+        if attempts_left < _MAX_ATTEMPTS:
+            st.warning(f"{attempts_left} attempt(s) remaining before lockout.")
+
         with st.form("admin_login_form"):
-            u = st.text_input("Username", placeholder="username", key="admin_u")
-            p = st.text_input("Password", type="password", placeholder="••••••••", key="admin_p")
+            u = st.text_input("Username", placeholder="username",   key="admin_u")
+            p = st.text_input("Password", type="password",
+                              placeholder="••••••••",                key="admin_p")
             submitted = st.form_submit_button("Sign In", use_container_width=True)
 
         if submitted:
-            try:
-                cu = st.secrets.get("USERNAME", os.getenv("USERNAME", "admin"))
-                cp = st.secrets.get("PASSWORD", os.getenv("PASSWORD", "1234"))
-            except Exception:
-                cu = os.getenv("USERNAME", "admin")
-                cp = os.getenv("PASSWORD", "1234")
-
-            if u == cu and p == cp:
-                st.session_state.logged_in = True
-                st.session_state.username  = u
+            if _verify_credentials(u, p):
+                st.session_state.logged_in      = True
+                st.session_state.username        = u
+                st.session_state.login_attempts  = 0
+                st.session_state.login_lock_until = 0
                 st.rerun()
             else:
-                st.error("Invalid credentials.")
+                _record_failure()
+                locked2, secs_left2 = _check_lockout()
+                if locked2:
+                    st.error(f"Account locked for {secs_left2 // 60}m {secs_left2 % 60}s.")
+                else:
+                    st.error("Invalid credentials.")
 
     st.markdown("</div>", unsafe_allow_html=True)
 
@@ -1097,13 +1097,6 @@ def render_admin_login_strip():
 
 def sidebar():
     with st.sidebar:
-        # ── THEME TOGGLE ──────────────────────────────────────────────────
-        is_light = st.session_state.theme == "light"
-        toggle_label = "🌙 Dark Mode" if is_light else "☀️ Light Mode"
-        if st.button(toggle_label, key="theme_toggle"):
-            st.session_state.theme = "dark" if is_light else "light"
-            st.rerun()
-
         st.markdown("""
         <div class='sb-brand'>
             <div class='sb-logo'>Vinay</div>
@@ -1140,83 +1133,10 @@ def sidebar():
             f"<div class='sb-user'>◆ {st.session_state.get('username','Admin').title()}</div>",
             unsafe_allow_html=True,
         )
-
-        # ── BACKUP & RESTORE ──────────────────────────────────────────────
-        st.markdown("<div class='sb-sep'></div>", unsafe_allow_html=True)
-        st.markdown("**💾 Backup & Restore**")
-
-        # Download checkpoint — export all sales as Excel
-        df_all = fetch_all()
-        if not df_all.empty:
-            excel_bytes = to_excel(df_all)
-            st.download_button(
-                label="⬇️ Download checkpoint",
-                data=excel_bytes,
-                file_name=f"boutique_backup_{date.today()}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True,
-                key="backup_download",
-            )
-        else:
-            st.button("⬇️ Download checkpoint", disabled=True, use_container_width=True, key="backup_download_empty")
-
-        # Restore from checkpoint
-        st.markdown("⬆️ **Restore from checkpoint**")
-        xfile = st.file_uploader("", type=["xlsx"], key="excel_upload", label_visibility="collapsed")
-        if xfile is not None:
-            try:
-                xdf = pd.read_excel(xfile)
-                col_map = {
-                    "Id": "id", "Customer Name": "customer_name",
-                    "Customer Phone": "customer_phone", "Sale Date": "sale_date",
-                    "Product Category": "product_category",
-                    "Product Description": "product_description",
-                    "Vendor": "vendor", "Buying Price": "buying_price",
-                    "Selling Price": "selling_price", "Profit": "profit",
-                    "Profit Margin %": "margin", "Amount Paid": "amount_paid",
-                    "Pending Amount": "pending_amount",
-                    "Payment Status": "payment_status", "Delayed": "delay_status",
-                    "Payment Method": "payment_method", "Notes": "notes",
-                    "Created At": "created_at",
-                }
-                xdf.rename(columns=col_map, inplace=True)
-                st.caption(f"Found **{len(xdf)}** rows")
-                if st.button("Import & Deduplicate", use_container_width=True, key="import_btn"):
-                    db_col = get_col()
-                    existing_ids = set(
-                        doc["id"] for doc in db_col.find({}, {"_id": 0, "id": 1}) if "id" in doc
-                    )
-                    inserted, skipped = 0, 0
-                    for _, row in xdf.iterrows():
-                        rid = row.get("id")
-                        if pd.notna(rid) and int(rid) in existing_ids:
-                            skipped += 1
-                            continue
-                        rec = {k: (None if pd.isna(v) else v) for k, v in row.items()}
-                        if "id" in rec and rec["id"] is not None:
-                            rec["id"] = int(rec["id"])
-                        ds = rec.get("delay_status", "No")
-                        rec["delay_status"] = 1 if str(ds).strip().lower() in ("yes","1","true") else 0
-                        ps = rec.get("payment_status", "Pending")
-                        rec["payment_received"] = 1 if str(ps).strip().lower() in ("received","paid","1") else 0
-                        for f in ["buying_price","selling_price","amount_paid","pending_amount"]:
-                            try: rec[f] = float(rec.get(f) or 0)
-                            except: rec[f] = 0.0
-                        sd = rec.get("sale_date")
-                        if sd is not None and not isinstance(sd, str):
-                            try: rec["sale_date"] = str(pd.Timestamp(sd).date())
-                            except: rec["sale_date"] = str(sd)
-                        db_col.insert_one(rec)
-                        if rid is not None:
-                            existing_ids.add(int(rid))
-                        inserted += 1
-                    invalidate_cache()
-                    st.success(f"✓ {inserted} imported, {skipped} duplicates skipped.")
-                    st.rerun()
-            except Exception as ex:
-                st.error(f"Error: {ex}")
-
     return nav
+
+# =====================================================
+# ADMIN PAGES
 # =====================================================
 
 def page_dashboard():
@@ -1802,11 +1722,6 @@ def page_inventory():
 def main():
     if "logged_in" not in st.session_state:
         st.session_state.logged_in = False
-    if "theme" not in st.session_state:
-        st.session_state.theme = "dark"
-
-    # Apply light mode CSS overrides if needed
-    inject_theme()
 
     if not st.session_state.logged_in:
         page_add_sale(public=True)
