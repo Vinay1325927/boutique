@@ -1109,10 +1109,30 @@ def decrement_inventory_for_sale(category: str, quantity: int) -> bool:
     return result.modified_count > 0
 
 # =====================================================
-# PUBLIC ADD SALE PAGE
+# ADD SALE PAGE
 # =====================================================
 
-def page_add_sale(public=False):
+def customer_autocomplete(label: str, customers, key: str, placeholder: str = "") -> str:
+    names = [str(r.get("_id", "")).strip() for r in customers if str(r.get("_id", "")).strip()]
+    try:
+        return st.selectbox(
+            label,
+            options=names,
+            index=None,
+            placeholder=placeholder or "Start typing a customer name",
+            accept_new_options=True,
+            key=key,
+        ) or ""
+    except TypeError:
+        typed = st.text_input(label, placeholder=placeholder or "Customer name", key=f"{key}_text")
+        if typed:
+            matches = [n for n in names if typed.lower() in n.lower()][:5]
+            if matches:
+                picked = st.selectbox("Suggestions", ["Use typed name"] + matches, key=f"{key}_suggestions")
+                return typed if picked == "Use typed name" else picked
+        return typed
+
+def render_new_sale_form(public=False, show_header=True):
     if public:
         st.markdown("""
         <div class='pub-banner'>
@@ -1120,7 +1140,7 @@ def page_add_sale(public=False):
             <div class='pub-banner-sub'>◆ Record a New Sale</div>
         </div>
         """, unsafe_allow_html=True)
-    else:
+    elif show_header:
         page_header("New Sale", "Record a Transaction")
 
     ctype = st.radio("", ["New Customer", "Existing Customer"], horizontal=True)
@@ -1276,6 +1296,92 @@ def page_add_sale(public=False):
                 st.success(f"✓ Sale recorded for {cname.strip()}.")
                 st.balloons()
                 st.rerun()
+
+def render_pending_payment_form():
+    sec("Customer")
+    customers = get_existing_customers_with_phone()
+
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        pname = customer_autocomplete(
+            "Customer Name *",
+            customers,
+            key="pending_customer_name",
+            placeholder="Start typing or enter a new name",
+        )
+    selected = next((r for r in customers if str(r.get("_id", "")).strip().lower() == pname.strip().lower()), None) if pname else None
+    with c2:
+        pphone_default = str(selected.get("phone", "") or "") if selected else ""
+        phone_key = f"pending_customer_phone_{re.sub(r'[^0-9A-Za-z]+', '_', pphone_default) or 'new'}"
+        pphone = st.text_input("Phone", value=pphone_default, placeholder="+91 XXXXXXXXXX", key=phone_key)
+    with c3:
+        pdate = st.date_input("Date", date.today(), key="pending_payment_date")
+
+    with st.form("pending_payment_form", clear_on_submit=True):
+        sec("Outstanding Amount")
+        a1, a2 = st.columns([1, 2])
+        with a1:
+            pending_amount = st.number_input("Pending Amount (₹) *", min_value=0.0, step=100.0, format="%.2f")
+        with a2:
+            pnotes = st.text_area("Notes", placeholder="Optional context for this pending payment", height=70)
+
+        submitted = st.form_submit_button("Save Pending Payment", use_container_width=True)
+
+        if submitted:
+            MAX = {"name": 120, "phone": 20, "notes": 500}
+            errs = []
+            if not pname.strip():
+                errs.append("Customer name is required.")
+            if len(pname) > MAX["name"]:
+                errs.append(f"Customer name must be under {MAX['name']} characters.")
+            if len(pphone) > MAX["phone"]:
+                errs.append(f"Phone number must be under {MAX['phone']} characters.")
+            if pphone.strip() and not is_valid_indian_phone(pphone):
+                errs.append("Enter a valid Indian phone number.")
+            if pending_amount <= 0:
+                errs.append("Pending amount must be > 0.")
+            if len(pnotes) > MAX["notes"]:
+                errs.append(f"Notes must be under {MAX['notes']} characters.")
+            if pname.strip() and pending_amount > 0 and duplicate_sale_exists(pname, pdate, pending_amount):
+                errs.append("This looks like a duplicate pending payment for the same customer, date, and amount.")
+
+            if errs:
+                for e in errs:
+                    st.error(e)
+            else:
+                get_col().insert_one({
+                    "id":                  get_next_id(),
+                    "customer_name":       pname.strip()[:120],
+                    "customer_phone":      pphone.strip()[:20],
+                    "sale_date":           str(pdate),
+                    "vendor":              "",
+                    "product_category":    "Other",
+                    "product_description": "Pending payment",
+                    "quantity":            1,
+                    "buying_price":        0.0,
+                    "selling_price":       round(pending_amount, 2),
+                    "amount_paid":         0.0,
+                    "pending_amount":      round(pending_amount, 2),
+                    "payment_received":    0,
+                    "delay_status":        0,
+                    "payment_method":      "Credit",
+                    "notes":               pnotes.strip()[:500],
+                    "created_at":          str(datetime.now()),
+                })
+                invalidate_cache()
+                st.success(f"✓ Pending payment saved for {pname.strip()} — ₹{pending_amount:,.2f}.")
+
+def page_add_sale(public=False):
+    if public:
+        render_new_sale_form(public=True)
+        return
+
+    page_header("Add Sale", "Record a Transaction")
+    sale_tab, pending_tab = st.tabs(["New Sale", "Pending Payment"])
+    with sale_tab:
+        render_new_sale_form(public=False, show_header=False)
+    with pending_tab:
+        render_pending_payment_form()
 
 # =====================================================
 # AUTH HELPERS
