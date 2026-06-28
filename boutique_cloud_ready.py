@@ -6,12 +6,13 @@ import plotly.express as px
 import plotly.graph_objects as go
 from io import BytesIO
 import os
+import re
 import time
 import hmac
-import hashlib
 from html import escape as html_escape
 import bcrypt
 from dotenv import load_dotenv
+from openpyxl.styles import Alignment, Font, PatternFill
 
 load_dotenv("credentials/.env")
 
@@ -915,7 +916,6 @@ def styled_fig(fig, height=340):
 
 CATEGORIES      = ["Sarees","Salwar Suits","Lehengas","Kurtis","Western Wear","Accessories","Kids Wear","Blouse","Fabric","Other"]
 PAYMENT_METHODS = ["Cash","UPI","Card","Bank Transfer","Part Payment","Credit"]
-STATE_OPTIONS   = ["Tamil Nadu","Maharashtra","Karnataka","Delhi","Gujarat","Rajasthan","West Bengal","Uttar Pradesh","Andhra Pradesh","Telangana","Other"]
 
 # =====================================================
 # MONGODB
@@ -963,16 +963,20 @@ def fetch_all() -> pd.DataFrame:
     if not docs:
         return pd.DataFrame()
     df = pd.DataFrame(docs)
-    for c in ["buying_price", "selling_price", "amount_paid", "pending_amount"]:
+    if "quantity" not in df.columns:
+        df["quantity"] = 1
+    for c in ["buying_price", "selling_price", "amount_paid", "pending_amount", "quantity"]:
         if c in df.columns:
             df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0.0)
+    df["quantity"] = df["quantity"].replace(0, 1)
     for c in ["payment_received", "delay_status"]:
         if c in df.columns:
             df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0).astype(int)
     if "sale_date" in df.columns:
         df["sale_date"] = pd.to_datetime(df["sale_date"], errors="coerce")
-    df["profit"] = df["selling_price"] - df["buying_price"]
-    df["margin"] = (df["profit"] / df["selling_price"].replace(0, 1) * 100).round(2)
+    df["profit"] = (df["selling_price"] - df["buying_price"]) * df["quantity"]
+    df["total_amount"] = df["selling_price"] * df["quantity"]
+    df["margin"] = (df["profit"] / df["total_amount"].replace(0, 1) * 100).round(2)
     for col in ["vendor", "product_description", "notes", "customer_phone"]:
         if col not in df.columns:
             df[col] = ""
@@ -986,7 +990,7 @@ def metrics(df: pd.DataFrame) -> dict:
         return dict(sales=0, revenue=0, profit=0, pending=0, delayed=0, margin=0, customers=0)
     return dict(
         sales     = len(df),
-        revenue   = df["selling_price"].sum(),
+        revenue   = df["total_amount"].sum() if "total_amount" in df.columns else df["selling_price"].sum(),
         profit    = df["profit"].sum(),
         pending   = df["pending_amount"].sum(),
         delayed   = int((df["delay_status"] == 1).sum()),
@@ -999,11 +1003,13 @@ def to_excel(df: pd.DataFrame) -> BytesIO:
     ex = df.copy()
     if "sale_date" in ex.columns:
         ex["sale_date"] = ex["sale_date"].astype(str)
-    ex["profit"]        = (ex["selling_price"] - ex["buying_price"]).round(2)
-    ex["profit_margin"] = (ex["profit"] / ex["selling_price"].replace(0, 1) * 100).round(2)
+    qty = ex["quantity"] if "quantity" in ex.columns else pd.Series([1] * len(ex), index=ex.index)
+    ex["profit"]        = ((ex["selling_price"] - ex["buying_price"]) * qty).round(2)
+    ex["total_amount"]  = (ex["selling_price"] * qty).round(2)
+    ex["profit_margin"] = (ex["profit"] / (ex["selling_price"] * qty).replace(0, 1) * 100).round(2)
     ex["status"]  = ex["payment_received"].map({0: "Pending", 1: "Received"})
     ex["delayed"] = ex["delay_status"].map({0: "No", 1: "Yes"})
-    ordered = ["id","customer_name","customer_phone","sale_date","vendor","product_category","product_description","buying_price","selling_price","profit","profit_margin","amount_paid","pending_amount","status","delayed","payment_method","notes","created_at"]
+    ordered = ["id","customer_name","customer_phone","sale_date","vendor","product_category","product_description","quantity","buying_price","selling_price","total_amount","profit","profit_margin","amount_paid","pending_amount","status","delayed","payment_method","notes","created_at"]
     cols = [c for c in ordered if c in ex.columns]
     ex = ex[cols]
     ex.columns = [c.replace("_", " ").title() for c in ex.columns]
@@ -1013,7 +1019,6 @@ def to_excel(df: pd.DataFrame) -> BytesIO:
         for i, col in enumerate(ex.columns, 1):
             ml = max(ex.iloc[:, i-1].astype(str).str.len().max(), len(col)) + 4
             ws.column_dimensions[ws.cell(1, i).column_letter].width = min(ml, 45)
-        from openpyxl.styles import Font, PatternFill, Alignment
         blue_fill = PatternFill("solid", fgColor="2E6FD8")
         for cell in ws[1]:
             cell.font = Font(bold=True, color="E8EEF8")
@@ -1066,6 +1071,42 @@ def rule_sm():
 
 def is_admin():
     return st.session_state.get("logged_in", False)
+
+def is_valid_indian_phone(phone: str) -> bool:
+    phone = (phone or "").strip()
+    if not phone:
+        return True
+    return bool(re.fullmatch(r"(?:\+91[\s-]?|91[\s-]?|0)?[6-9]\d{9}", phone))
+
+def duplicate_sale_exists(customer_name: str, sale_date, selling_price: float, exclude_id=None) -> bool:
+    query = {
+        "customer_name": {"$regex": f"^{re.escape(customer_name.strip())}$", "$options": "i"},
+        "sale_date": str(sale_date),
+        "selling_price": round(float(selling_price), 2),
+    }
+    if exclude_id is not None:
+        query["id"] = {"$ne": exclude_id}
+    return get_col().count_documents(query, limit=1) > 0
+
+def append_payment_history(row_id, amount: float, method: str = "", note: str = ""):
+    get_col().update_one(
+        {"id": row_id},
+        {"$push": {"payment_history": {
+            "amount": round(float(amount), 2),
+            "method": method,
+            "note": note,
+            "paid_at": str(datetime.now()),
+        }}},
+    )
+
+def decrement_inventory_for_sale(category: str, quantity: int) -> bool:
+    if quantity <= 0:
+        return False
+    result = get_db()["inventory"].update_one(
+        {"category": category, "quantity": {"$gte": int(quantity)}},
+        {"$inc": {"quantity": -int(quantity)}, "$set": {"updated_at": str(datetime.now())}},
+    )
+    return result.modified_count > 0
 
 # =====================================================
 # PUBLIC ADD SALE PAGE
@@ -1147,15 +1188,16 @@ def page_add_sale(public=False):
         with pr3: paid_amt = st.number_input("Amount Paid (₹)",     min_value=0.0, step=100.0, format="%.2f")
         with pr4: pm       = st.selectbox("Payment Method", PAYMENT_METHODS)
 
-        pending_amt = max(round(sell - paid_amt, 2), 0.0)
+        total_amt = round(sell * qty, 2)
+        pending_amt = max(round(total_amt - paid_amt, 2), 0.0)
         profit_amt  = round((sell - buy) * qty, 2)
-        margin_pct  = round(profit_amt / (sell * qty) * 100, 2) if sell > 0 else 0.0
+        margin_pct  = round(profit_amt / total_amt * 100, 2) if total_amt > 0 else 0.0
 
         m1, m2, m3, m4 = st.columns(4)
         m1.metric("Pending",        f"₹{pending_amt:,.2f}")
         m2.metric("Profit (Total)", f"₹{profit_amt:,.2f}")
         m3.metric("Margin",         f"{margin_pct:.1f}%")
-        m4.metric("Total Value",    f"₹{sell * qty:,.2f}")
+        m4.metric("Total Value",    f"₹{total_amt:,.2f}")
 
         notes = st.text_area("Notes", placeholder="Special instructions…", height=60)
 
@@ -1186,19 +1228,24 @@ def page_add_sale(public=False):
             if len(vend) > MAX["vendor"]:   errs.append(f"Vendor name must be under {MAX['vendor']} characters.")
             if len(desc) > MAX["desc"]:     errs.append(f"Description must be under {MAX['desc']} characters.")
             if len(notes) > MAX["notes"]:   errs.append(f"Notes must be under {MAX['notes']} characters.")
+            if cphone.strip() and not is_valid_indian_phone(cphone):
+                errs.append("Enter a valid Indian phone number.")
 
             if not cname.strip():  errs.append("Customer name is required.")
             if buy  <= 0:          errs.append("Buying price must be > 0.")
             if sell <= 0:          errs.append("Selling price must be > 0.")
-            if paid_amt > sell:    errs.append("Amount paid cannot exceed selling price.")
-            if sell < buy:
-                st.warning("Selling price is below buying price — this sale will be a loss.")
+            if paid_amt > total_amt: errs.append("Amount paid cannot exceed total sale value.")
+            if cname.strip() and sell > 0 and duplicate_sale_exists(cname, sdate, sell):
+                errs.append("This looks like a duplicate sale for the same customer, date, and amount.")
 
             if errs:
                 for e in errs: st.error(e)
             else:
-                get_col().insert_one({
-                    "id":                  get_next_id(),
+                if sell < buy:
+                    st.warning("Selling price is below buying price — this sale will be a loss.")
+                sale_id = get_next_id()
+                doc = {
+                    "id":                  sale_id,
                     "customer_name":       cname.strip()[:120],
                     "customer_phone":      cphone.strip()[:20],
                     "sale_date":           str(sdate),
@@ -1215,7 +1262,16 @@ def page_add_sale(public=False):
                     "payment_method":      pm,
                     "notes":               notes.strip()[:500],
                     "created_at":          str(datetime.now()),
-                })
+                }
+                if paid_amt > 0:
+                    doc["payment_history"] = [{
+                        "amount": round(paid_amt, 2),
+                        "method": pm,
+                        "note": "Initial payment",
+                        "paid_at": str(datetime.now()),
+                    }]
+                get_col().insert_one(doc)
+                decrement_inventory_for_sale(cat, qty)
                 invalidate_cache()
                 st.success(f"✓ Sale recorded for {cname.strip()}.")
                 st.balloons()
@@ -1227,7 +1283,6 @@ def page_add_sale(public=False):
 
 _MAX_ATTEMPTS   = 5
 _LOCKOUT_SECS   = 300   # 5-minute lockout after max attempts
-_BACKOFF_BASE   = 1.5   # seconds — doubles each attempt after 1st failure
 
 def _get_stored_hash() -> bytes | None:
     """
@@ -1287,10 +1342,6 @@ def _record_failure():
     st.session_state.login_attempts = attempts
     if attempts >= _MAX_ATTEMPTS:
         st.session_state.login_lock_until = time.time() + _LOCKOUT_SECS
-    else:
-        # Progressive back-off delay (no await needed — this is server-side Streamlit)
-        delay = _BACKOFF_BASE * (2 ** (attempts - 1))
-        time.sleep(min(delay, 30))
 
 
 def _verify_credentials(username: str, password: str) -> bool:
@@ -1442,7 +1493,7 @@ def page_dashboard():
 
     cl, cr = st.columns([3, 2])
     with cl:
-        monthly = df.groupby("month").agg(revenue=("selling_price","sum"), profit=("profit","sum"), sales=("id","count")).reset_index()
+        monthly = df.groupby("month").agg(revenue=("total_amount","sum"), profit=("profit","sum"), sales=("id","count")).reset_index()
         fig = go.Figure()
         fig.add_trace(go.Bar(x=monthly["month"], y=monthly["revenue"], name="Revenue", marker_color="rgba(46,111,216,0.4)", marker_line_color="#2E6FD8", marker_line_width=1))
         fig.add_trace(go.Scatter(x=monthly["month"], y=monthly["profit"], name="Profit", mode="lines+markers", line=dict(color="#7ADFA0", width=2), marker=dict(size=5, color="#7ADFA0")))
@@ -1460,12 +1511,12 @@ def page_dashboard():
 
     cl2, cr2 = st.columns(2)
     with cl2:
-        cat_rev = df.groupby("product_category")["selling_price"].sum().reset_index()
-        fig3 = px.pie(cat_rev, values="selling_price", names="product_category", title="Revenue by Category", hole=0.55, color_discrete_sequence=["#2E6FD8","#4D8AE8","#7ADFA0","#8BACD8","#E08090","#1A3D80","#3D9A6C","#4A9AC8","#9B9070","#A8C4F0"])
+        cat_rev = df.groupby("product_category")["total_amount"].sum().reset_index()
+        fig3 = px.pie(cat_rev, values="total_amount", names="product_category", title="Revenue by Category", hole=0.55, color_discrete_sequence=["#2E6FD8","#4D8AE8","#7ADFA0","#8BACD8","#E08090","#1A3D80","#3D9A6C","#4A9AC8","#9B9070","#A8C4F0"])
         styled_fig(fig3, 270); st.plotly_chart(fig3, use_container_width=True)
 
     with cr2:
-        daily = df.set_index("sale_date")["selling_price"].resample("D").sum().reset_index()
+        daily = df.set_index("sale_date")["total_amount"].resample("D").sum().reset_index()
         daily.columns = ["date","revenue"]
         daily["rolling"] = daily["revenue"].rolling(7, min_periods=1).mean()
         fig4 = go.Figure()
@@ -1475,11 +1526,20 @@ def page_dashboard():
         st.plotly_chart(fig4, use_container_width=True)
 
     sec("Recent Transactions")
-    recent = df.sort_values("sale_date", ascending=False).head(10).copy()
+    dash_search = st.text_input("Quick customer lookup", placeholder="Search customer, phone, notes, or description")
+    recent_source = df.copy()
+    if dash_search:
+        recent_source = recent_source[
+            recent_source["customer_name"].str.contains(dash_search, case=False, na=False)
+            | recent_source["customer_phone"].astype(str).str.contains(dash_search, case=False, na=False)
+            | recent_source["notes"].astype(str).str.contains(dash_search, case=False, na=False)
+            | recent_source["product_description"].astype(str).str.contains(dash_search, case=False, na=False)
+        ]
+    recent = recent_source.sort_values("sale_date", ascending=False).head(10).copy()
     recent["sale_date"] = recent["sale_date"].dt.strftime("%d %b %Y")
     recent["Status"]    = recent["payment_received"].map({1:"Paid", 0:"Pending"})
     recent["Delayed"]   = recent["delay_status"].map({0:"—", 1:"Yes"})
-    show = recent[["id","customer_name","sale_date","product_category","selling_price","profit","pending_amount","Status","Delayed"]].copy()
+    show = recent[["id","customer_name","sale_date","product_category","total_amount","profit","pending_amount","Status","Delayed"]].copy()
     show.columns = ["ID","Customer","Date","Category","Amount ₹","Profit ₹","Pending ₹","Status","Delayed"]
     st.dataframe(show, use_container_width=True, hide_index=True)
 
@@ -1500,18 +1560,32 @@ def page_review():
 
     with st.expander("Filter & Sort", expanded=True):
         c1, c2, c3, c4 = st.columns(4)
-        with c1: srch  = st.text_input("Customer / Phone")
+        with c1: srch  = st.text_input("Customer / Phone / Notes")
         with c2: catf  = st.selectbox("Category",   ["All"] + CATEGORIES)
         with c3: payf  = st.selectbox("Payment",    ["All","Paid","Pending"])
         with c4: dlayf = st.selectbox("Delay Flag", ["All","On Time","Delayed"])
-        c5, c6, c7 = st.columns(3)
+        c5, c6, c7, c8 = st.columns(4)
         with c5: sortby = st.selectbox("Sort By", ["Date ↓","Date ↑","Amount ↓","Pending ↓","Profit ↓"])
-        with c6: d_from = st.date_input("From", value=date.today() - timedelta(days=90))
-        with c7: d_to   = st.date_input("To",   value=date.today())
+        with c6: preset = st.selectbox("Range", ["Last 90 days","Last 7 days","Last 30 days","This month","This year","Custom"])
+        today = date.today()
+        preset_from = {
+            "Last 7 days": today - timedelta(days=7),
+            "Last 30 days": today - timedelta(days=30),
+            "Last 90 days": today - timedelta(days=90),
+            "This month": today.replace(day=1),
+            "This year": today.replace(month=1, day=1),
+        }.get(preset, today - timedelta(days=90))
+        with c7: d_from = st.date_input("From", value=preset_from, disabled=(preset != "Custom"))
+        with c8: d_to   = st.date_input("To",   value=today, disabled=(preset != "Custom"))
 
     fdf = df.copy()
     if srch:
-        mask = fdf["customer_name"].str.contains(srch, case=False, na=False) | fdf["customer_phone"].astype(str).str.contains(srch, na=False)
+        mask = (
+            fdf["customer_name"].str.contains(srch, case=False, na=False)
+            | fdf["customer_phone"].astype(str).str.contains(srch, case=False, na=False)
+            | fdf["notes"].astype(str).str.contains(srch, case=False, na=False)
+            | fdf["product_description"].astype(str).str.contains(srch, case=False, na=False)
+        )
         fdf = fdf[mask]
     if catf  != "All": fdf = fdf[fdf["product_category"] == catf]
     if payf  == "Paid":     fdf = fdf[fdf["payment_received"] == 1]
@@ -1519,24 +1593,24 @@ def page_review():
     if dlayf == "On Time":  fdf = fdf[fdf["delay_status"] == 0]
     elif dlayf == "Delayed": fdf = fdf[fdf["delay_status"] == 1]
     fdf = fdf[(fdf["sale_date"] >= pd.Timestamp(d_from)) & (fdf["sale_date"] <= pd.Timestamp(d_to))]
-    sm = {"Date ↓":("sale_date",False),"Date ↑":("sale_date",True),"Amount ↓":("selling_price",False),"Pending ↓":("pending_amount",False),"Profit ↓":("profit",False)}
+    sm = {"Date ↓":("sale_date",False),"Date ↑":("sale_date",True),"Amount ↓":("total_amount",False),"Pending ↓":("pending_amount",False),"Profit ↓":("profit",False)}
     sc, sa = sm[sortby]
     fdf = fdf.sort_values(sc, ascending=sa)
 
     rule_sm()
     m1, m2, m3, m4, m5 = st.columns(5)
     m1.metric("Transactions", len(fdf))
-    m2.metric("Revenue",      f"₹{fdf['selling_price'].sum():,.0f}")
+    m2.metric("Revenue",      f"₹{fdf['total_amount'].sum():,.0f}")
     m3.metric("Profit",       f"₹{fdf['profit'].sum():,.0f}")
     m4.metric("Pending",      f"₹{fdf['pending_amount'].sum():,.0f}")
     m5.metric("Avg Margin",   f"{fdf['margin'].mean():.1f}%" if not fdf.empty else "—")
     rule_sm()
 
-    show = fdf[["id","customer_name","customer_phone","sale_date","product_category","buying_price","selling_price","profit","amount_paid","pending_amount","payment_method","delay_status","payment_received"]].copy()
+    show = fdf[["id","customer_name","customer_phone","sale_date","product_category","buying_price","total_amount","profit","amount_paid","pending_amount","payment_method","delay_status","payment_received"]].copy()
     show["sale_date"]        = show["sale_date"].dt.strftime("%d %b %Y")
     show["delay_status"]     = show["delay_status"].map({0:"—", 1:"Yes"})
     show["payment_received"] = show["payment_received"].map({0:"Pending", 1:"Paid"})
-    show.columns = ["ID","Customer","Phone","Date","Category","Buy ₹","Sell ₹","Profit ₹","Paid ₹","Pending ₹","Method","Delayed","Status"]
+    show.columns = ["ID","Customer","Phone","Date","Category","Buy ₹","Amount ₹","Profit ₹","Paid ₹","Pending ₹","Method","Delayed","Status"]
     st.dataframe(show, use_container_width=True, hide_index=True)
 
     dc, de, _ = st.columns([1,1,2])
@@ -1553,16 +1627,32 @@ def page_review():
         st.markdown(f"<span class='badge badge-gold'>{len(pend)} pending — ₹{pend['pending_amount'].sum():,.0f}</span>", unsafe_allow_html=True)
         st.markdown("<br>", unsafe_allow_html=True)
         for _, row in pend.iterrows():
-            ca, cb, cc, cd, ce = st.columns([3,2,1.5,1,1])
+            ca, cb, cc, cd, ce = st.columns([3,2,1.5,1.5,1])
             ca.write(f"**{row['customer_name']}** · {row['product_category']}")
             cb.write(f"₹{row['pending_amount']:,.2f} pending")
             cc.write(row["sale_date"].strftime("%d %b %Y") if pd.notna(row["sale_date"]) else "—")
             with cd:
-                if st.button("Mark Paid", key=f"p_{row['id']}_{row['customer_name']}"):
-                    get_col().update_one({"id": row["id"]}, {"$set": {"payment_received":1,"amount_paid":float(row["selling_price"]),"pending_amount":0.0}})
-                    invalidate_cache(); st.rerun()
+                pay_now = st.number_input(
+                    "Pay",
+                    min_value=0.0,
+                    max_value=float(row["pending_amount"]),
+                    value=float(row["pending_amount"]),
+                    step=100.0,
+                    format="%.2f",
+                    key=f"pay_{row['id']}",
+                    label_visibility="collapsed",
+                )
             with ce:
-                if st.button("Flag", key=f"f_{row['id']}_{row['customer_name']}"):
+                if st.button("Add", key=f"p_{row['id']}"):
+                    if pay_now <= 0:
+                        st.warning("Enter a payment amount.")
+                    else:
+                        new_paid = round(float(row["amount_paid"]) + pay_now, 2)
+                        new_pending = max(round(float(row["pending_amount"]) - pay_now, 2), 0.0)
+                        get_col().update_one({"id": row["id"]}, {"$set": {"payment_received":1 if new_pending == 0 else 0,"amount_paid":new_paid,"pending_amount":new_pending}})
+                        append_payment_history(row["id"], pay_now, row.get("payment_method", ""), "Payment update")
+                        invalidate_cache(); st.rerun()
+                if st.button("Flag", key=f"f_{row['id']}"):
                     get_col().update_one({"id": row["id"]}, {"$set": {"delay_status":1}})
                     invalidate_cache(); st.rerun()
 
@@ -1603,7 +1693,7 @@ def page_update():
         c1, c2, c3 = st.columns(3)
         with c1:
             nn = st.text_input("Customer Name", value=str(row.get("customer_name","")))
-            np = st.text_input("Phone",          value=str(row.get("customer_phone","")))
+            n_phone = st.text_input("Phone",     value=str(row.get("customer_phone","")))
         with c2:
             ci  = CATEGORIES.index(row["product_category"]) if row.get("product_category") in CATEGORIES else 0
             nc  = st.selectbox("Category", CATEGORIES, index=ci)
@@ -1627,23 +1717,35 @@ def page_update():
         nd     = st.checkbox("Mark as Delayed", value=bool(row.get("delay_status",0)))
         nnotes = st.text_area("Notes", value=str(row.get("notes","")), height=60)
 
-        npend   = max(round(ns - npa, 2), 0.0)
-        nprofit = round(ns - nb, 2)
+        ntotal  = round(ns * nqty, 2)
+        npend   = max(round(ntotal - npa, 2), 0.0)
+        nprofit = round((ns - nb) * nqty, 2)
         m1, m2, m3 = st.columns(3)
         m1.metric("Updated Pending", f"₹{npend:,.2f}")
         m2.metric("Updated Profit",  f"₹{nprofit:,.2f}")
-        m3.metric("Updated Margin",  f"{(nprofit/ns*100 if ns>0 else 0):.1f}%")
+        m3.metric("Updated Margin",  f"{(nprofit/ntotal*100 if ntotal>0 else 0):.1f}%")
 
+        confirm_delete = st.checkbox("Confirm delete for this transaction")
         bu, bd = st.columns(2)
         with bu: upd = st.form_submit_button("Save Changes",       use_container_width=True)
         with bd: dlt = st.form_submit_button("Delete Transaction",  use_container_width=True)
 
         if upd:
-            if npa > ns:
-                st.error("Amount paid cannot exceed selling price.")
+            errs = []
+            if not nn.strip():
+                errs.append("Customer name is required.")
+            if n_phone.strip() and not is_valid_indian_phone(n_phone):
+                errs.append("Enter a valid Indian phone number.")
+            if npa > ntotal:
+                errs.append("Amount paid cannot exceed total sale value.")
+            if nn.strip() and duplicate_sale_exists(nn, new_date, ns, exclude_id=sel):
+                errs.append("This looks like a duplicate sale for the same customer, date, and amount.")
+            if errs:
+                for e in errs: st.error(e)
             else:
+                old_paid = float(row.get("amount_paid", 0) or 0)
                 get_col().update_one({"id": sel}, {"$set": {
-                    "customer_name": nn.strip(), "customer_phone": np.strip(),
+                    "customer_name": nn.strip(), "customer_phone": n_phone.strip(),
                     "sale_date": str(new_date), "product_category": nc,
                     "vendor": nv.strip(), "product_description": ndesc.strip(),
                     "quantity": nqty, "buying_price": round(nb,2),
@@ -1653,10 +1755,15 @@ def page_update():
                     "payment_received": 1 if npend==0 else 0,
                     "updated_at": str(datetime.now()),
                 }})
+                if npa > old_paid:
+                    append_payment_history(sel, npa - old_paid, npm, "Payment adjusted during update")
                 invalidate_cache(); st.success("Transaction updated."); st.rerun()
         if dlt:
-            get_col().delete_one({"id": sel})
-            invalidate_cache(); st.success("Transaction deleted."); st.rerun()
+            if not confirm_delete:
+                st.error("Tick the confirmation checkbox before deleting.")
+            else:
+                get_col().delete_one({"id": sel})
+                invalidate_cache(); st.success("Transaction deleted."); st.rerun()
 
 
 def page_customers():
@@ -1668,7 +1775,7 @@ def page_customers():
 
     summ = (df.groupby("customer_name").agg(
         phone=("customer_phone","first"), transactions=("id","count"),
-        spent=("selling_price","sum"), pending=("pending_amount","sum"),
+        spent=("total_amount","sum"), pending=("pending_amount","sum"),
         last_visit=("sale_date","max"), profit=("profit","sum"),
     ).reset_index())
     summ["last_visit"] = pd.to_datetime(summ["last_visit"]).dt.strftime("%d %b %Y")
@@ -1710,16 +1817,16 @@ def page_customers():
         hist["sale_date"] = hist["sale_date"].dt.strftime("%d %b %Y")
         h1, h2, h3, h4 = st.columns(4)
         h1.metric("Visits",      len(hist))
-        h2.metric("Total Spent", f"₹{hist['selling_price'].sum():,.0f}")
+        h2.metric("Total Spent", f"₹{hist['total_amount'].sum():,.0f}")
         h3.metric("Pending",     f"₹{hist['pending_amount'].sum():,.0f}")
         h4.metric("Profit",      f"₹{hist['profit'].sum():,.0f}")
-        cols = [c for c in ["sale_date","product_category","product_description","selling_price","amount_paid","pending_amount","payment_method","status"] if c in hist.columns]
+        cols = [c for c in ["sale_date","product_category","product_description","total_amount","amount_paid","pending_amount","payment_method","status"] if c in hist.columns]
         show = hist[cols].copy()
         show.columns = ["Date","Category","Description","Price ₹","Paid ₹","Pending ₹","Method","Status"][:len(cols)]
         st.dataframe(show, use_container_width=True, hide_index=True)
         if len(hist) > 1:
             hs = df[df["customer_name"]==chosen].sort_values("sale_date").copy()
-            hs["cumulative"] = hs["selling_price"].cumsum()
+            hs["cumulative"] = hs["total_amount"].cumsum()
             fig = px.line(hs, x="sale_date", y="cumulative", title=f"Cumulative Spend — {chosen}", markers=True)
             fig.update_traces(line_color="#2E6FD8", marker_color="#4D8AE8", marker_size=5)
             styled_fig(fig, 230); st.plotly_chart(fig, use_container_width=True)
@@ -1736,9 +1843,9 @@ def page_analytics():
     df["dow"]   = df["sale_date"].dt.day_name()
 
     k1, k2, k3, k4, k5 = st.columns(5)
-    k1.metric("Revenue",       f"₹{df['selling_price'].sum():,.0f}")
+    k1.metric("Revenue",       f"₹{df['total_amount'].sum():,.0f}")
     k2.metric("Profit",        f"₹{df['profit'].sum():,.0f}")
-    k3.metric("Avg Order",     f"₹{df['selling_price'].mean():,.0f}")
+    k3.metric("Avg Order",     f"₹{df['total_amount'].mean():,.0f}")
     k4.metric("Avg Margin",    f"{df['margin'].mean():.1f}%")
     k5.metric("Delayed Count", int((df["delay_status"]==1).sum()))
 
@@ -1748,14 +1855,14 @@ def page_analytics():
     with t1:
         c1, c2 = st.columns(2)
         with c1:
-            monthly = df.groupby("month").agg(revenue=("selling_price","sum"), profit=("profit","sum")).reset_index()
+            monthly = df.groupby("month").agg(revenue=("total_amount","sum"), profit=("profit","sum")).reset_index()
             fig = go.Figure()
             fig.add_trace(go.Bar(x=monthly["month"], y=monthly["revenue"], name="Revenue", marker_color="rgba(46,111,216,0.4)", marker_line_color="#2E6FD8", marker_line_width=1))
             fig.add_trace(go.Scatter(x=monthly["month"], y=monthly["profit"], name="Profit", mode="lines+markers", line=dict(color="#7ADFA0", width=2), marker=dict(size=5)))
             styled_fig(fig).update_layout(title="Revenue & Profit by Month", barmode="overlay", legend=dict(orientation="h", y=1.18, x=0))
             st.plotly_chart(fig, use_container_width=True)
         with c2:
-            daily = df.set_index("sale_date")["selling_price"].resample("D").sum().reset_index()
+            daily = df.set_index("sale_date")["total_amount"].resample("D").sum().reset_index()
             daily.columns = ["date","revenue"]
             fig2 = px.area(daily, x="date", y="revenue", title="Daily Revenue")
             fig2.update_traces(fillcolor="rgba(46,111,216,0.12)", line_color="#2E6FD8", line_width=1.5)
@@ -1763,7 +1870,7 @@ def page_analytics():
         c3, c4 = st.columns(2)
         with c3:
             dow_order = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]
-            dow = df.groupby("dow").agg(sales=("id","count"), revenue=("selling_price","sum")).reset_index()
+            dow = df.groupby("dow").agg(sales=("id","count"), revenue=("total_amount","sum")).reset_index()
             dow["dow"] = pd.Categorical(dow["dow"], categories=dow_order, ordered=True)
             dow = dow.sort_values("dow")
             fig3 = px.bar(dow, x="dow", y="sales", title="Sales by Day of Week", color="revenue", color_continuous_scale=[[0,"#070C18"],[1,"#2E6FD8"]])
@@ -1776,8 +1883,8 @@ def page_analytics():
     with t2:
         c1, c2 = st.columns(2)
         with c1:
-            top_c = df.groupby("customer_name")["selling_price"].sum().nlargest(10).reset_index()
-            fig5 = px.bar(top_c, x="selling_price", y="customer_name", orientation="h", title="Top 10 Customers by Revenue", color="selling_price", color_continuous_scale=[[0,"#070C18"],[1,"#2E6FD8"]])
+            top_c = df.groupby("customer_name")["total_amount"].sum().nlargest(10).reset_index()
+            fig5 = px.bar(top_c, x="total_amount", y="customer_name", orientation="h", title="Top 10 Customers by Revenue", color="total_amount", color_continuous_scale=[[0,"#070C18"],[1,"#2E6FD8"]])
             styled_fig(fig5); fig5.update_layout(yaxis=dict(autorange="reversed")); st.plotly_chart(fig5, use_container_width=True)
         with c2:
             cp = df.groupby("customer_name")["pending_amount"].sum()
@@ -1787,10 +1894,10 @@ def page_analytics():
                 styled_fig(fig6); fig6.update_layout(yaxis=dict(autorange="reversed")); st.plotly_chart(fig6, use_container_width=True)
             else:
                 st.success("No pending amounts.")
-        cust_stats = df.groupby("customer_name").agg(visits=("id","count"), revenue=("selling_price","sum"), avg_order=("selling_price","mean")).reset_index()
+        cust_stats = df.groupby("customer_name").agg(visits=("id","count"), revenue=("total_amount","sum"), avg_order=("total_amount","mean")).reset_index()
         fig_scatter = px.scatter(cust_stats, x="visits", y="revenue", size="avg_order", hover_name="customer_name", title="Customer Value Matrix", color="revenue", color_continuous_scale=[[0,"#070C18"],[1,"#2E6FD8"]])
         styled_fig(fig_scatter, 330); st.plotly_chart(fig_scatter, use_container_width=True)
-        seg = df.groupby("customer_name").agg(spend=("selling_price","sum")).reset_index()
+        seg = df.groupby("customer_name").agg(spend=("total_amount","sum")).reset_index()
         seg["tier"] = pd.cut(seg["spend"], bins=[0,5000,20000,50000,float("inf")], labels=["Bronze","Silver","Gold","Platinum"])
         sec("Customer Tier Distribution")
         sg = seg.groupby("tier", observed=True).agg(customers=("customer_name","count"), total=("spend","sum")).reset_index()
@@ -1804,11 +1911,11 @@ def page_analytics():
             fig7 = px.pie(cd, values="count", names="product_category", title="Sales Volume by Category", hole=0.55, color_discrete_sequence=["#2E6FD8","#4D8AE8","#7ADFA0","#8BACD8","#E08090","#1A3D80","#3D9A6C","#4A9AC8","#9B9070","#A8C4F0"])
             styled_fig(fig7); st.plotly_chart(fig7, use_container_width=True)
         with c2:
-            cp2 = df.groupby("product_category").agg(profit=("profit","sum"), revenue=("selling_price","sum")).reset_index()
+            cp2 = df.groupby("product_category").agg(profit=("profit","sum"), revenue=("total_amount","sum")).reset_index()
             cp2["margin"] = (cp2["profit"]/cp2["revenue"]*100).round(1)
             fig8 = px.bar(cp2, x="product_category", y="profit", title="Profit by Category", color="margin", color_continuous_scale=[[0,"#070C18"],[1,"#7ADFA0"]])
             styled_fig(fig8); st.plotly_chart(fig8, use_container_width=True)
-        cm = df.groupby(["month","product_category"])["selling_price"].sum().unstack(fill_value=0)
+        cm = df.groupby(["month","product_category"])["total_amount"].sum().unstack(fill_value=0)
         if not cm.empty:
             fig9 = px.imshow(cm.T, title="Category × Month Heatmap", color_continuous_scale=[[0,"#070C18"],[0.4,"#1A3D80"],[1,"#2E6FD8"]], aspect="auto")
             styled_fig(fig9, 300); st.plotly_chart(fig9, use_container_width=True)
@@ -1839,7 +1946,7 @@ def page_analytics():
         c1, c2 = st.columns(2)
         with c1:
             if "vendor" in df.columns:
-                vd = (df[df["vendor"].astype(str).str.strip() != ""].groupby("vendor").agg(revenue=("selling_price","sum"), items=("id","count")).nlargest(10,"revenue").reset_index())
+                vd = (df[df["vendor"].astype(str).str.strip() != ""].groupby("vendor").agg(revenue=("total_amount","sum"), items=("id","count")).nlargest(10,"revenue").reset_index())
                 if not vd.empty:
                     fig13 = px.bar(vd, x="revenue", y="vendor", orientation="h", title="Top Vendors by Revenue", color="revenue", color_continuous_scale=[[0,"#070C18"],[1,"#2E6FD8"]])
                     styled_fig(fig13); fig13.update_layout(yaxis=dict(autorange="reversed")); st.plotly_chart(fig13, use_container_width=True)
@@ -1849,7 +1956,7 @@ def page_analytics():
             if "product_description" in df.columns:
                 pd2 = df[df["product_description"].astype(str).str.strip() != ""].copy()
                 if not pd2.empty:
-                    tm = (pd2.groupby("product_description").agg(margin=("margin","mean"), revenue=("selling_price","sum")).nlargest(10,"margin").reset_index())
+                    tm = (pd2.groupby("product_description").agg(margin=("margin","mean"), revenue=("total_amount","sum")).nlargest(10,"margin").reset_index())
                     tm["product_description"] = tm["product_description"].str[:30]
                     fig14 = px.bar(tm, x="margin", y="product_description", orientation="h", title="Top Products by Margin %", color="margin", color_continuous_scale=[[0,"#070C18"],[1,"#7ADFA0"]])
                     styled_fig(fig14); fig14.update_layout(yaxis=dict(autorange="reversed")); st.plotly_chart(fig14, use_container_width=True)
@@ -1892,7 +1999,11 @@ def page_reminders():
                     cb.write(r.get("product_category","—"))
                     with cc:
                         if st.button("Mark Paid", key=f"op_{r['id']}"):
-                            get_col().update_one({"id": r["id"]}, {"$set": {"payment_received":1,"amount_paid":float(r["selling_price"]),"pending_amount":0.0}})
+                            total_due = float(r["selling_price"]) * float(r.get("quantity", 1) or 1)
+                            payment_delta = max(total_due - float(r.get("amount_paid", 0) or 0), 0.0)
+                            get_col().update_one({"id": r["id"]}, {"$set": {"payment_received":1,"amount_paid":total_due,"pending_amount":0.0}})
+                            if payment_delta > 0:
+                                append_payment_history(r["id"], payment_delta, r.get("payment_method", ""), "Marked paid from reminders")
                             invalidate_cache(); st.rerun()
                     with cd:
                         if st.button("Remind", key=f"or_{r['id']}"):
@@ -1904,7 +2015,7 @@ def page_reminders():
             st.success("No flagged payments.")
         else:
             st.error(f"{len(dl)} flagged — ₹{dl['pending_amount'].sum():,.0f}")
-            show = dl[["customer_name","sale_date","product_category","selling_price","pending_amount","days_old"]].copy()
+            show = dl[["customer_name","sale_date","product_category","total_amount","pending_amount","days_old"]].copy()
             show["sale_date"] = show["sale_date"].dt.strftime("%d %b %Y")
             show.columns = ["Customer","Date","Category","Amount ₹","Pending ₹","Days Old"]
             st.dataframe(show, use_container_width=True, hide_index=True)
@@ -1914,13 +2025,13 @@ def page_reminders():
                 invalidate_cache(); st.success("Flag cleared."); st.rerun()
 
     with t3:
-        hv = df[df["selling_price"] >= 10000].sort_values("selling_price", ascending=False).head(20).copy()
+        hv = df[df["total_amount"] >= 10000].sort_values("total_amount", ascending=False).head(20).copy()
         if hv.empty:
             st.info("No high-value sales (₹10,000+) yet.")
         else:
             hv["sale_date"]        = hv["sale_date"].dt.strftime("%d %b %Y")
             hv["payment_received"] = hv["payment_received"].map({0:"Pending",1:"Paid"})
-            show = hv[["customer_name","sale_date","product_category","selling_price","profit","payment_received"]].copy()
+            show = hv[["customer_name","sale_date","product_category","total_amount","profit","payment_received"]].copy()
             show.columns = ["Customer","Date","Category","Amount ₹","Profit ₹","Status"]
             st.dataframe(show, use_container_width=True, hide_index=True)
 
@@ -1947,9 +2058,12 @@ def page_inventory():
             st.markdown("<div class='empty'><div class='empty-glyph'>◆</div><div>No inventory items yet.</div></div>", unsafe_allow_html=True)
         else:
             inv_df = pd.DataFrame(items)
-            total_value  = (inv_df.get("quantity", pd.Series([0])) * inv_df.get("cost_price", pd.Series([0]))).sum()
-            low_stock    = inv_df[inv_df.get("quantity", pd.Series([0])) <= inv_df.get("min_stock", pd.Series([5]))]
-            out_of_stock = inv_df[inv_df.get("quantity", pd.Series([0])) == 0]
+            q_col = inv_df["quantity"] if "quantity" in inv_df.columns else pd.Series([0] * len(inv_df), index=inv_df.index)
+            cost_col = inv_df["cost_price"] if "cost_price" in inv_df.columns else pd.Series([0] * len(inv_df), index=inv_df.index)
+            min_col = inv_df["min_stock"] if "min_stock" in inv_df.columns else pd.Series([5] * len(inv_df), index=inv_df.index)
+            total_value  = (q_col * cost_col).sum()
+            low_stock    = inv_df[q_col <= min_col]
+            out_of_stock = inv_df[q_col == 0]
             m1, m2, m3, m4 = st.columns(4)
             m1.metric("Total SKUs",      len(inv_df))
             m2.metric("Inventory Value", f"₹{total_value:,.0f}")
@@ -2088,11 +2202,11 @@ def page_backup_restore():
 
         uploaded = st.file_uploader(
             "Upload Checkpoint File",
-            type=["csv"],
-            help="Upload a CSV file previously exported from this application",
+            type=["csv", "xlsx", "xls"],
+            help="Upload a CSV or Excel file previously exported from this application",
             label_visibility="visible",
         )
-        st.caption("200 MB max · CSV format only")
+        st.caption("200 MB max · CSV or Excel format")
 
         if last_restore_ts:
             st.markdown(
@@ -2103,7 +2217,8 @@ def page_backup_restore():
 
         if uploaded is not None:
             try:
-                restore_df = pd.read_csv(uploaded)
+                file_name = uploaded.name.lower()
+                restore_df = pd.read_excel(uploaded) if file_name.endswith((".xlsx", ".xls")) else pd.read_csv(uploaded)
                 row_count = len(restore_df)
                 col_count = len(restore_df.columns)
 
@@ -2153,9 +2268,12 @@ def page_backup_restore():
                             "Product Category":    "product_category",
                             "Product Description": "product_description",
                             "Vendor":              "vendor",
+                            "Quantity":            "quantity",
                             "Buying Price":        "buying_price",
                             "Selling Price":       "selling_price",
+                            "Total Amount":        "total_amount",
                             "Profit":              "profit",
+                            "Profit Margin":       "margin",
                             "Profit Margin %":     "margin",
                             "Amount Paid":         "amount_paid",
                             "Pending Amount":      "pending_amount",
@@ -2171,10 +2289,7 @@ def page_backup_restore():
                             columns={k: v for k, v in EXPORT_TO_INTERNAL.items() if k in restore_df.columns}
                         )
                         # Also lowercase any remaining columns that weren't renamed
-                        restore_df.columns = [
-                            c.lower().replace(" ", "_") if c not in restore_df.columns else c
-                            for c in restore_df.columns
-                        ]
+                        restore_df.columns = [str(c).lower().replace(" ", "_") for c in restore_df.columns]
 
                         required_cols = {"customer_name", "selling_price"}
                         if not required_cols.issubset(set(restore_df.columns)):
@@ -2209,7 +2324,7 @@ def page_backup_restore():
                                         doc["delay_status"] = 0
 
                                     # Normalise numeric types
-                                    for num_col in ["buying_price", "selling_price", "amount_paid", "pending_amount", "quantity", "profit", "margin"]:
+                                    for num_col in ["buying_price", "selling_price", "total_amount", "amount_paid", "pending_amount", "quantity", "profit", "margin"]:
                                         if num_col in doc:
                                             try:
                                                 doc[num_col] = float(doc[num_col])
@@ -2218,6 +2333,16 @@ def page_backup_restore():
                                     for int_col in ["payment_received", "delay_status"]:
                                         if int_col in doc:
                                             doc[int_col] = int(doc[int_col])
+                                    if "sale_date" in doc:
+                                        try:
+                                            doc["sale_date"] = str(pd.to_datetime(doc["sale_date"]).date())
+                                        except Exception:
+                                            doc["sale_date"] = str(doc["sale_date"])
+
+                                    if all(k in doc for k in ["customer_name", "sale_date", "selling_price"]):
+                                        if duplicate_sale_exists(doc["customer_name"], doc["sale_date"], doc["selling_price"]):
+                                            skipped += 1
+                                            continue
 
                                     # Drop the old exported id — assign a fresh one
                                     doc.pop("id", None)
@@ -2287,7 +2412,7 @@ def main():
     # Apply light mode CSS overrides if needed
     inject_theme()
 
-    if not st.session_state.logged_in:
+    if not is_admin():
         page_add_sale(public=True)
         render_admin_login_strip()
         return
