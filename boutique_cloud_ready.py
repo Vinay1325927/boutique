@@ -974,28 +974,56 @@ def fetch_all() -> pd.DataFrame:
             df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0).astype(int)
     if "sale_date" in df.columns:
         df["sale_date"] = pd.to_datetime(df["sale_date"], errors="coerce")
-    df["profit"] = (df["selling_price"] - df["buying_price"]) * df["quantity"]
-    df["total_amount"] = df["selling_price"] * df["quantity"]
-    df["margin"] = (df["profit"] / df["total_amount"].replace(0, 1) * 100).round(2)
-    for col in ["vendor", "product_description", "notes", "customer_phone"]:
+    for col in ["vendor", "product_description", "notes", "customer_phone", "transaction_type"]:
         if col not in df.columns:
             df[col] = ""
+    pending_only = is_pending_payment_record(df)
+    df.loc[pending_only, "transaction_type"] = "pending_payment"
+    df["profit"] = (df["selling_price"] - df["buying_price"]) * df["quantity"]
+    df.loc[pending_only, "profit"] = 0.0
+    df["total_amount"] = df["selling_price"] * df["quantity"]
+    df["margin"] = (df["profit"] / df["total_amount"].replace(0, 1) * 100).round(2)
+    df.loc[pending_only, "margin"] = 0.0
     return df
 
 def invalidate_cache():
     fetch_all.clear()
 
+def is_pending_payment_record(df: pd.DataFrame) -> pd.Series:
+    if df.empty:
+        return pd.Series(dtype=bool)
+    transaction_type = df["transaction_type"] if "transaction_type" in df.columns else pd.Series([""] * len(df), index=df.index)
+    description = df["product_description"] if "product_description" in df.columns else pd.Series([""] * len(df), index=df.index)
+    category = df["product_category"] if "product_category" in df.columns else pd.Series([""] * len(df), index=df.index)
+    buying = df["buying_price"] if "buying_price" in df.columns else pd.Series([0] * len(df), index=df.index)
+    pending = df["pending_amount"] if "pending_amount" in df.columns else pd.Series([0] * len(df), index=df.index)
+    return (
+        transaction_type.eq("pending_payment")
+        | (
+            description.astype(str).str.lower().eq("pending payment")
+            & category.astype(str).eq("Other")
+            & buying.eq(0)
+            & pending.gt(0)
+        )
+    )
+
+def accounted_sales(df: pd.DataFrame) -> pd.DataFrame:
+    if df.empty:
+        return df
+    return df[~is_pending_payment_record(df)].copy()
+
 def metrics(df: pd.DataFrame) -> dict:
     if df.empty:
         return dict(sales=0, revenue=0, profit=0, pending=0, delayed=0, margin=0, customers=0)
+    sales_df = accounted_sales(df)
     return dict(
-        sales     = len(df),
-        revenue   = df["total_amount"].sum() if "total_amount" in df.columns else df["selling_price"].sum(),
-        profit    = df["profit"].sum(),
+        sales     = len(sales_df),
+        revenue   = sales_df["total_amount"].sum() if "total_amount" in sales_df.columns else sales_df["selling_price"].sum(),
+        profit    = sales_df["profit"].sum(),
         pending   = df["pending_amount"].sum(),
-        delayed   = int((df["delay_status"] == 1).sum()),
-        margin    = df["margin"].mean(),
-        customers = df["customer_name"].nunique(),
+        delayed   = int((sales_df["delay_status"] == 1).sum()) if not sales_df.empty else 0,
+        margin    = sales_df["margin"].mean() if not sales_df.empty else 0,
+        customers = sales_df["customer_name"].nunique() if not sales_df.empty else 0,
     )
 
 def to_excel(df: pd.DataFrame) -> BytesIO:
@@ -1005,8 +1033,11 @@ def to_excel(df: pd.DataFrame) -> BytesIO:
         ex["sale_date"] = ex["sale_date"].astype(str)
     qty = ex["quantity"] if "quantity" in ex.columns else pd.Series([1] * len(ex), index=ex.index)
     ex["profit"]        = ((ex["selling_price"] - ex["buying_price"]) * qty).round(2)
+    pending_only = is_pending_payment_record(ex)
+    ex.loc[pending_only, "profit"] = 0.0
     ex["total_amount"]  = (ex["selling_price"] * qty).round(2)
     ex["profit_margin"] = (ex["profit"] / (ex["selling_price"] * qty).replace(0, 1) * 100).round(2)
+    ex.loc[pending_only, "profit_margin"] = 0.0
     ex["status"]  = ex["payment_received"].map({0: "Pending", 1: "Received"})
     ex["delayed"] = ex["delay_status"].map({0: "No", 1: "Yes"})
     ordered = ["id","customer_name","customer_phone","sale_date","vendor","product_category","product_description","quantity","buying_price","selling_price","total_amount","profit","profit_margin","amount_paid","pending_amount","status","delayed","payment_method","notes","created_at"]
@@ -1281,6 +1312,7 @@ def render_new_sale_form(public=False, show_header=True):
                     "delay_status":        0,
                     "payment_method":      pm,
                     "notes":               notes.strip()[:500],
+                    "transaction_type":     "sale",
                     "created_at":          str(datetime.now()),
                 }
                 if paid_amt > 0:
@@ -1366,6 +1398,7 @@ def render_pending_payment_form():
                     "delay_status":        0,
                     "payment_method":      "Credit",
                     "notes":               pnotes.strip()[:500],
+                    "transaction_type":     "pending_payment",
                     "created_at":          str(datetime.now()),
                 })
                 invalidate_cache()
@@ -1578,8 +1611,8 @@ def sidebar():
 
 def page_dashboard():
     page_header("Dashboard", "Business Overview")
-    df = fetch_all()
-    m  = metrics(df)
+    all_df = fetch_all()
+    m  = metrics(all_df)
 
     c1, c2, c3, c4, c5, c6 = st.columns(6)
     c1.metric("Sales",      m["sales"])
@@ -1591,8 +1624,13 @@ def page_dashboard():
 
     rule()
 
-    if df.empty:
+    if all_df.empty:
         st.markdown("<div class='empty'><div class='empty-glyph'>◆</div><div>No sales yet.</div></div>", unsafe_allow_html=True)
+        return
+
+    df = accounted_sales(all_df)
+    if df.empty:
+        st.markdown("<div class='empty'><div class='empty-glyph'>◆</div><div>No recorded sales yet. Pending payments are still included in the Pending total.</div></div>", unsafe_allow_html=True)
         return
 
     df["month"] = df["sale_date"].dt.to_period("M").astype(str)
@@ -1940,9 +1978,9 @@ def page_customers():
 
 def page_analytics():
     page_header("Analytics", "Business Intelligence")
-    df = fetch_all()
+    df = accounted_sales(fetch_all())
     if df.empty:
-        st.info("No data available.")
+        st.info("No recorded sales available.")
         return
 
     df["month"] = df["sale_date"].dt.to_period("M").astype(str)
