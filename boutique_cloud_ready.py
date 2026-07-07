@@ -664,7 +664,7 @@ input[type="text"], input[type="number"], input[type="date"], textarea {
 }
 .pay-grid {
     display: grid;
-    grid-template-columns: minmax(240px, 2fr) minmax(140px, 1fr) minmax(140px, 1fr);
+    grid-template-columns: minmax(240px, 2fr) minmax(150px, 1fr) minmax(140px, 1fr) minmax(140px, 1fr);
     gap: 1rem;
     align-items: center;
 }
@@ -967,6 +967,7 @@ def styled_fig(fig, height=340):
 
 CATEGORIES      = ["Sarees","Salwar Suits","Lehengas","Kurtis","Western Wear","Accessories","Kids Wear","Blouse","Fabric","Other"]
 PAYMENT_METHODS = ["Cash","UPI","Card","Bank Transfer","Part Payment","Credit"]
+PAYMENT_COLLECTION_METHODS = ["Cash", "UPI", "Bank Transfer", "Card"]
 STATE_OPTIONS   = ["Tamil Nadu","Maharashtra","Karnataka","Delhi","Gujarat","Rajasthan","West Bengal","Uttar Pradesh","Andhra Pradesh","Telangana","Other"]
 VENDOR_MANUAL_OPTION = "Add new vendor..."
 
@@ -1026,7 +1027,7 @@ def fetch_all() -> pd.DataFrame:
         df["sale_date"] = pd.to_datetime(df["sale_date"], errors="coerce")
     df["profit"] = df["selling_price"] - df["buying_price"]
     df["margin"] = (df["profit"] / df["selling_price"].replace(0, 1) * 100).round(2)
-    for col in ["vendor", "product_description", "notes", "customer_phone", "last_payment_date", "payment_date"]:
+    for col in ["vendor", "product_description", "notes", "customer_phone", "last_payment_date", "payment_date", "last_payment_method", "last_payment_received_by"]:
         if col not in df.columns:
             df[col] = ""
     return df
@@ -1060,7 +1061,7 @@ def to_excel(df: pd.DataFrame) -> BytesIO:
     ex["profit_margin"] = (ex["profit"] / ex["selling_price"].replace(0, 1) * 100).round(2)
     ex["status"]  = ex["payment_received"].map({0: "Pending", 1: "Received"})
     ex["delayed"] = ex["delay_status"].map({0: "No", 1: "Yes"})
-    ordered = ["id","customer_name","customer_phone","sale_date","vendor","product_category","product_description","buying_price","selling_price","profit","profit_margin","amount_paid","pending_amount","status","delayed","payment_method","last_payment_date","payment_date","notes","created_at"]
+    ordered = ["id","customer_name","customer_phone","sale_date","vendor","product_category","product_description","buying_price","selling_price","profit","profit_margin","amount_paid","pending_amount","status","delayed","payment_method","last_payment_method","last_payment_date","last_payment_received_by","payment_date","notes","created_at"]
     cols = [c for c in ordered if c in ex.columns]
     ex = ex[cols]
     ex.columns = [c.replace("_", " ").title() for c in ex.columns]
@@ -1184,19 +1185,30 @@ def currency_input(label: str, key: str, value: float | None = None) -> tuple[st
     parsed, valid = parse_currency(raw)
     return raw, parsed, valid
 
-def record_payment(row: pd.Series, payment_amount: float, payment_date: date) -> tuple[bool, str]:
+def default_receiver_name() -> str:
+    return str(st.session_state.get("username") or "Admin").strip().title()
+
+def record_payment(row: pd.Series, payment_amount: float, payment_date: date, payment_method: str, received_by: str) -> tuple[bool, str]:
     pending = round(max(money_value(row.get("pending_amount")), 0.0), 2)
     amount = round(payment_amount, 2)
+    payment_method = str(payment_method or "").strip()
+    received_by = str(received_by or "").strip()
     if amount <= 0:
         return False, "Payment amount must be greater than 0."
     if amount > pending:
         return False, "Payment amount cannot exceed the pending amount."
+    if not payment_method:
+        return False, "Select how the customer paid."
+    if not received_by:
+        return False, "Enter who received the payment."
 
     new_pending = round(max(pending - amount, 0.0), 2)
     new_paid = round(money_value(row.get("amount_paid")) + amount, 2)
     payment_entry = {
         "amount": amount,
         "date": str(payment_date),
+        "method": payment_method,
+        "received_by": received_by[:80],
         "recorded_at": str(datetime.now()),
         "recorded_by": st.session_state.get("username", "Admin"),
     }
@@ -1205,6 +1217,9 @@ def record_payment(row: pd.Series, payment_amount: float, payment_date: date) ->
         "pending_amount": new_pending,
         "payment_received": 1 if new_pending == 0 else 0,
         "last_payment_date": str(payment_date),
+        "last_payment_method": payment_method,
+        "last_payment_received_by": received_by[:80],
+        "payment_method": payment_method,
         "updated_at": str(datetime.now()),
     }
     if new_pending == 0:
@@ -1712,12 +1727,15 @@ def page_review():
     m5.metric("Avg Margin",   f"{fdf['margin'].mean():.1f}%" if not fdf.empty else "—")
     rule_sm()
 
-    show = fdf[["id","customer_name","customer_phone","sale_date","product_category","buying_price","selling_price","profit","amount_paid","pending_amount","payment_method","last_payment_date","delay_status","payment_received"]].copy()
+    show = fdf[["id","customer_name","customer_phone","sale_date","vendor","product_category","buying_price","selling_price","profit","amount_paid","pending_amount","payment_method","last_payment_method","last_payment_date","last_payment_received_by","delay_status","payment_received"]].copy()
     show["sale_date"]        = show["sale_date"].dt.strftime("%d %b %Y")
+    show["vendor"] = show["vendor"].fillna("—").replace("", "—")
+    show["last_payment_method"] = show["last_payment_method"].fillna("—").replace("", "—")
     show["last_payment_date"] = show["last_payment_date"].fillna("—").replace("", "—")
+    show["last_payment_received_by"] = show["last_payment_received_by"].fillna("—").replace("", "—")
     show["delay_status"]     = show["delay_status"].map({0:"—", 1:"Yes"})
     show["payment_received"] = show["payment_received"].map({0:"Pending", 1:"Paid"})
-    show.columns = ["ID","Customer","Phone","Date","Category","Buy ₹","Sell ₹","Profit ₹","Paid ₹","Pending ₹","Method","Paid Date","Delayed","Status"]
+    show.columns = ["ID","Customer","Phone","Date","Vendor","Category","Buy ₹","Sell ₹","Profit ₹","Paid ₹","Pending ₹","Sale Method","Paid Method","Paid Date","Received By","Delayed","Status"]
     st.dataframe(show, use_container_width=True, hide_index=True)
 
     dc, de, _ = st.columns([1,1,2])
@@ -1737,6 +1755,7 @@ def page_review():
             row_id = int(row["id"])
             sale_day = row["sale_date"].strftime("%d %b %Y") if pd.notna(row["sale_date"]) else "—"
             pending_value = money_value(row.get("pending_amount"))
+            vendor_name = str(row.get("vendor", "") or "").strip() or "—"
             st.markdown(
                 f"""
                 <div class='pay-card'>
@@ -1744,6 +1763,10 @@ def page_review():
                         <div>
                             <div class='pay-name'>{html_escape(str(row['customer_name']))}</div>
                             <div class='pay-meta'>{html_escape(str(row.get('product_category', '—')))} · Sale #{row_id}</div>
+                        </div>
+                        <div>
+                            <div class='pay-label'>Vendor</div>
+                            <div class='pay-amount'>{html_escape(vendor_name)}</div>
                         </div>
                         <div>
                             <div class='pay-label'>Pending</div>
@@ -1767,11 +1790,15 @@ def page_review():
             if st.session_state.get("payment_editor_id") == row_id:
                 st.markdown("<div class='pay-form-note'>Enter the received amount. Use the full pending amount for complete payment, or a smaller amount for partial payment.</div>", unsafe_allow_html=True)
                 with st.form(f"payment_form_{row_id}"):
-                    pc1, pc2 = st.columns(2)
+                    pc1, pc2, pc3, pc4 = st.columns([1, 1, 1, 1.2])
                     with pc1:
                         _, payment_amount, payment_ok = currency_input("Amount Received (₹)", f"payment_amount_{row_id}", pending_value)
                     with pc2:
                         payment_date = st.date_input("Paid Date", value=date.today(), key=f"payment_date_{row_id}")
+                    with pc3:
+                        payment_method = st.selectbox("Paid By", PAYMENT_COLLECTION_METHODS, key=f"payment_method_{row_id}")
+                    with pc4:
+                        received_by = st.text_input("Received By", value=default_receiver_name(), key=f"payment_received_by_{row_id}")
                     save_col, cancel_col = st.columns(2)
                     with save_col:
                         save_payment = st.form_submit_button("Save Payment", use_container_width=True)
@@ -1782,7 +1809,7 @@ def page_review():
                         if not payment_ok:
                             st.error("Payment amount must be a valid number.")
                         else:
-                            ok, message = record_payment(row, payment_amount, payment_date)
+                            ok, message = record_payment(row, payment_amount, payment_date, payment_method, received_by)
                             if ok:
                                 st.session_state.payment_editor_id = None
                                 st.success(message)
@@ -2157,11 +2184,15 @@ def page_reminders():
                     if st.session_state.get("overdue_payment_editor_id") == row_id:
                         st.markdown("<div class='pay-form-note'>Enter full or partial payment details.</div>", unsafe_allow_html=True)
                         with st.form(f"overdue_payment_form_{row_id}"):
-                            pc1, pc2 = st.columns(2)
+                            pc1, pc2, pc3, pc4 = st.columns([1, 1, 1, 1.2])
                             with pc1:
                                 _, payment_amount, payment_ok = currency_input("Amount Received (₹)", f"overdue_payment_amount_{row_id}", money_value(r.get("pending_amount")))
                             with pc2:
                                 payment_date = st.date_input("Paid Date", value=date.today(), key=f"overdue_payment_date_{row_id}")
+                            with pc3:
+                                payment_method = st.selectbox("Paid By", PAYMENT_COLLECTION_METHODS, key=f"overdue_payment_method_{row_id}")
+                            with pc4:
+                                received_by = st.text_input("Received By", value=default_receiver_name(), key=f"overdue_payment_received_by_{row_id}")
                             save_col, cancel_col = st.columns(2)
                             with save_col:
                                 save_payment = st.form_submit_button("Save Payment", use_container_width=True)
@@ -2171,7 +2202,7 @@ def page_reminders():
                                 if not payment_ok:
                                     st.error("Payment amount must be a valid number.")
                                 else:
-                                    ok, message = record_payment(r, payment_amount, payment_date)
+                                    ok, message = record_payment(r, payment_amount, payment_date, payment_method, received_by)
                                     if ok:
                                         st.session_state.overdue_payment_editor_id = None
                                         st.success(message)
