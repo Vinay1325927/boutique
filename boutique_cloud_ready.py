@@ -652,6 +652,53 @@ input[type="text"], input[type="number"], input[type="date"], textarea {
 .badge-red   { background: rgba(220,38,38,0.09); color: #991b1b; }
 .badge-muted { background: var(--bg-2); color: var(--muted); }
 
+/* ━━━ PAYMENT COLLECTION ━━━ */
+.pay-card {
+    background: linear-gradient(135deg, rgba(255,255,255,0.98), rgba(248,250,255,0.96));
+    border: 1.5px solid rgba(37,99,235,0.16);
+    border-left: 4px solid var(--blue);
+    border-radius: var(--r-lg);
+    box-shadow: var(--shadow-sm);
+    padding: 1rem 1.15rem;
+    margin: 0.85rem 0 0.35rem;
+}
+.pay-grid {
+    display: grid;
+    grid-template-columns: minmax(240px, 2fr) minmax(140px, 1fr) minmax(140px, 1fr);
+    gap: 1rem;
+    align-items: center;
+}
+.pay-name {
+    color: var(--text);
+    font-size: 0.95rem;
+    font-weight: 700;
+}
+.pay-meta {
+    color: var(--muted);
+    font-size: 0.78rem;
+    margin-top: 0.2rem;
+}
+.pay-amount {
+    color: var(--text);
+    font-size: 1rem;
+    font-weight: 700;
+}
+.pay-label {
+    color: var(--dim);
+    font-size: 0.66rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+.pay-form-note {
+    color: var(--muted);
+    font-size: 0.78rem;
+    margin: 0.15rem 0 0.75rem;
+}
+@media (max-width: 760px) {
+    .pay-grid { grid-template-columns: 1fr; gap: 0.55rem; }
+}
+
 /* ━━━ EMPTY STATE ━━━ */
 .empty { text-align: center; padding: 4rem 2rem; color: var(--dim); }
 .empty-glyph { font-size: 2rem; margin-bottom: 1rem; color: var(--border); }
@@ -979,7 +1026,7 @@ def fetch_all() -> pd.DataFrame:
         df["sale_date"] = pd.to_datetime(df["sale_date"], errors="coerce")
     df["profit"] = df["selling_price"] - df["buying_price"]
     df["margin"] = (df["profit"] / df["selling_price"].replace(0, 1) * 100).round(2)
-    for col in ["vendor", "product_description", "notes", "customer_phone"]:
+    for col in ["vendor", "product_description", "notes", "customer_phone", "last_payment_date", "payment_date"]:
         if col not in df.columns:
             df[col] = ""
     return df
@@ -1013,7 +1060,7 @@ def to_excel(df: pd.DataFrame) -> BytesIO:
     ex["profit_margin"] = (ex["profit"] / ex["selling_price"].replace(0, 1) * 100).round(2)
     ex["status"]  = ex["payment_received"].map({0: "Pending", 1: "Received"})
     ex["delayed"] = ex["delay_status"].map({0: "No", 1: "Yes"})
-    ordered = ["id","customer_name","customer_phone","sale_date","vendor","product_category","product_description","buying_price","selling_price","profit","profit_margin","amount_paid","pending_amount","status","delayed","payment_method","notes","created_at"]
+    ordered = ["id","customer_name","customer_phone","sale_date","vendor","product_category","product_description","buying_price","selling_price","profit","profit_margin","amount_paid","pending_amount","status","delayed","payment_method","last_payment_date","payment_date","notes","created_at"]
     cols = [c for c in ordered if c in ex.columns]
     ex = ex[cols]
     ex.columns = [c.replace("_", " ").title() for c in ex.columns]
@@ -1123,11 +1170,53 @@ def parse_currency(raw: str) -> tuple[float, bool]:
         return 0.0, False
     return value, value >= 0
 
+def money_value(value, default: float = 0.0) -> float:
+    try:
+        if value is None or value == "":
+            return default
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
 def currency_input(label: str, key: str, value: float | None = None) -> tuple[str, float, bool]:
     default = "" if value in (None, 0, 0.0) else f"{float(value):.2f}"
     raw = st.text_input(label, value=default, placeholder="0.00", key=key)
     parsed, valid = parse_currency(raw)
     return raw, parsed, valid
+
+def record_payment(row: pd.Series, payment_amount: float, payment_date: date) -> tuple[bool, str]:
+    pending = round(max(money_value(row.get("pending_amount")), 0.0), 2)
+    amount = round(payment_amount, 2)
+    if amount <= 0:
+        return False, "Payment amount must be greater than 0."
+    if amount > pending:
+        return False, "Payment amount cannot exceed the pending amount."
+
+    new_pending = round(max(pending - amount, 0.0), 2)
+    new_paid = round(money_value(row.get("amount_paid")) + amount, 2)
+    payment_entry = {
+        "amount": amount,
+        "date": str(payment_date),
+        "recorded_at": str(datetime.now()),
+        "recorded_by": st.session_state.get("username", "Admin"),
+    }
+    set_fields = {
+        "amount_paid": new_paid,
+        "pending_amount": new_pending,
+        "payment_received": 1 if new_pending == 0 else 0,
+        "last_payment_date": str(payment_date),
+        "updated_at": str(datetime.now()),
+    }
+    if new_pending == 0:
+        set_fields["payment_date"] = str(payment_date)
+
+    get_col().update_one(
+        {"id": int(row["id"])},
+        {"$set": set_fields, "$push": {"payment_history": payment_entry}},
+    )
+    invalidate_cache()
+    status = "Payment completed." if new_pending == 0 else f"Partial payment saved. ₹{new_pending:,.2f} still pending."
+    return True, status
 
 def vendor_picker(label: str, key_prefix: str, current: str = "") -> str:
     current = str(current or "").strip()
@@ -1623,11 +1712,12 @@ def page_review():
     m5.metric("Avg Margin",   f"{fdf['margin'].mean():.1f}%" if not fdf.empty else "—")
     rule_sm()
 
-    show = fdf[["id","customer_name","customer_phone","sale_date","product_category","buying_price","selling_price","profit","amount_paid","pending_amount","payment_method","delay_status","payment_received"]].copy()
+    show = fdf[["id","customer_name","customer_phone","sale_date","product_category","buying_price","selling_price","profit","amount_paid","pending_amount","payment_method","last_payment_date","delay_status","payment_received"]].copy()
     show["sale_date"]        = show["sale_date"].dt.strftime("%d %b %Y")
+    show["last_payment_date"] = show["last_payment_date"].fillna("—").replace("", "—")
     show["delay_status"]     = show["delay_status"].map({0:"—", 1:"Yes"})
     show["payment_received"] = show["payment_received"].map({0:"Pending", 1:"Paid"})
-    show.columns = ["ID","Customer","Phone","Date","Category","Buy ₹","Sell ₹","Profit ₹","Paid ₹","Pending ₹","Method","Delayed","Status"]
+    show.columns = ["ID","Customer","Phone","Date","Category","Buy ₹","Sell ₹","Profit ₹","Paid ₹","Pending ₹","Method","Paid Date","Delayed","Status"]
     st.dataframe(show, use_container_width=True, hide_index=True)
 
     dc, de, _ = st.columns([1,1,2])
@@ -1644,18 +1734,64 @@ def page_review():
         st.markdown(f"<span class='badge badge-gold'>{len(pend)} pending — ₹{pend['pending_amount'].sum():,.0f}</span>", unsafe_allow_html=True)
         st.markdown("<br>", unsafe_allow_html=True)
         for _, row in pend.iterrows():
-            ca, cb, cc, cd, ce = st.columns([3,2,1.5,1,1])
-            ca.write(f"**{row['customer_name']}** · {row['product_category']}")
-            cb.write(f"₹{row['pending_amount']:,.2f} pending")
-            cc.write(row["sale_date"].strftime("%d %b %Y") if pd.notna(row["sale_date"]) else "—")
-            with cd:
-                if st.button("Mark Paid", key=f"p_{row['id']}_{row['customer_name']}"):
-                    get_col().update_one({"id": row["id"]}, {"$set": {"payment_received":1,"amount_paid":float(row["selling_price"]),"pending_amount":0.0}})
-                    invalidate_cache(); st.rerun()
-            with ce:
-                if st.button("Flag", key=f"f_{row['id']}_{row['customer_name']}"):
-                    get_col().update_one({"id": row["id"]}, {"$set": {"delay_status":1}})
-                    invalidate_cache(); st.rerun()
+            row_id = int(row["id"])
+            sale_day = row["sale_date"].strftime("%d %b %Y") if pd.notna(row["sale_date"]) else "—"
+            pending_value = money_value(row.get("pending_amount"))
+            st.markdown(
+                f"""
+                <div class='pay-card'>
+                    <div class='pay-grid'>
+                        <div>
+                            <div class='pay-name'>{html_escape(str(row['customer_name']))}</div>
+                            <div class='pay-meta'>{html_escape(str(row.get('product_category', '—')))} · Sale #{row_id}</div>
+                        </div>
+                        <div>
+                            <div class='pay-label'>Pending</div>
+                            <div class='pay-amount'>₹{pending_value:,.2f}</div>
+                        </div>
+                        <div>
+                            <div class='pay-label'>Sale Date</div>
+                            <div class='pay-amount'>{sale_day}</div>
+                        </div>
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+            action_cols = st.columns([4, 1])
+            with action_cols[1]:
+                if st.button("Mark Paid", key=f"pay_open_{row_id}", use_container_width=True):
+                    st.session_state.payment_editor_id = row_id
+                    st.rerun()
+
+            if st.session_state.get("payment_editor_id") == row_id:
+                st.markdown("<div class='pay-form-note'>Enter the received amount. Use the full pending amount for complete payment, or a smaller amount for partial payment.</div>", unsafe_allow_html=True)
+                with st.form(f"payment_form_{row_id}"):
+                    pc1, pc2 = st.columns(2)
+                    with pc1:
+                        _, payment_amount, payment_ok = currency_input("Amount Received (₹)", f"payment_amount_{row_id}", pending_value)
+                    with pc2:
+                        payment_date = st.date_input("Paid Date", value=date.today(), key=f"payment_date_{row_id}")
+                    save_col, cancel_col = st.columns(2)
+                    with save_col:
+                        save_payment = st.form_submit_button("Save Payment", use_container_width=True)
+                    with cancel_col:
+                        cancel_payment = st.form_submit_button("Cancel", use_container_width=True)
+
+                    if save_payment:
+                        if not payment_ok:
+                            st.error("Payment amount must be a valid number.")
+                        else:
+                            ok, message = record_payment(row, payment_amount, payment_date)
+                            if ok:
+                                st.session_state.payment_editor_id = None
+                                st.success(message)
+                                st.rerun()
+                            else:
+                                st.error(message)
+                    if cancel_payment:
+                        st.session_state.payment_editor_id = None
+                        st.rerun()
 
 
 def page_update():
@@ -2007,16 +2143,44 @@ def page_reminders():
             st.warning(f"{len(ov)} overdue — ₹{ov['pending_amount'].sum():,.0f} total")
             for _, r in ov.iterrows():
                 with st.expander(f"{r['customer_name']}  ·  ₹{r['pending_amount']:,.0f}  ·  {int(r['days_old'])} days"):
+                    row_id = int(r["id"])
                     ca, cb, cc, cd = st.columns([2,2,1,1])
                     ca.write(r["sale_date"].strftime("%d %b %Y"))
                     cb.write(r.get("product_category","—"))
                     with cc:
-                        if st.button("Mark Paid", key=f"op_{r['id']}"):
-                            get_col().update_one({"id": r["id"]}, {"$set": {"payment_received":1,"amount_paid":float(r["selling_price"]),"pending_amount":0.0}})
-                            invalidate_cache(); st.rerun()
+                        if st.button("Mark Paid", key=f"op_{row_id}", use_container_width=True):
+                            st.session_state.overdue_payment_editor_id = row_id
+                            st.rerun()
                     with cd:
-                        if st.button("Remind", key=f"or_{r['id']}"):
+                        if st.button("Remind", key=f"or_{row_id}", use_container_width=True):
                             st.toast(f"Reminder noted for {r['customer_name']}.")
+                    if st.session_state.get("overdue_payment_editor_id") == row_id:
+                        st.markdown("<div class='pay-form-note'>Enter full or partial payment details.</div>", unsafe_allow_html=True)
+                        with st.form(f"overdue_payment_form_{row_id}"):
+                            pc1, pc2 = st.columns(2)
+                            with pc1:
+                                _, payment_amount, payment_ok = currency_input("Amount Received (₹)", f"overdue_payment_amount_{row_id}", money_value(r.get("pending_amount")))
+                            with pc2:
+                                payment_date = st.date_input("Paid Date", value=date.today(), key=f"overdue_payment_date_{row_id}")
+                            save_col, cancel_col = st.columns(2)
+                            with save_col:
+                                save_payment = st.form_submit_button("Save Payment", use_container_width=True)
+                            with cancel_col:
+                                cancel_payment = st.form_submit_button("Cancel", use_container_width=True)
+                            if save_payment:
+                                if not payment_ok:
+                                    st.error("Payment amount must be a valid number.")
+                                else:
+                                    ok, message = record_payment(r, payment_amount, payment_date)
+                                    if ok:
+                                        st.session_state.overdue_payment_editor_id = None
+                                        st.success(message)
+                                        st.rerun()
+                                    else:
+                                        st.error(message)
+                            if cancel_payment:
+                                st.session_state.overdue_payment_editor_id = None
+                                st.rerun()
 
     with t2:
         dl = df[df["delay_status"] == 1].sort_values("pending_amount", ascending=False)
