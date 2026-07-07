@@ -16,6 +16,10 @@ from dotenv import load_dotenv
 
 load_dotenv("credentials/.env")
 
+BRAND_NAME = "Shree Krishna Boutique"
+BRAND_SHORT_NAME = "Shree Krishna"
+BILL_SYMBOL_PATH = os.path.join(os.path.dirname(__file__), "krishna_symbol.png")
+
 # =====================================================
 # PASSWORD HASH UTILITY
 # Run once in a Python shell to generate your hash:
@@ -34,7 +38,7 @@ load_dotenv("credentials/.env")
 # =====================================================
 
 st.set_page_config(
-    page_title="Vinay Boutique",
+    page_title=BRAND_NAME,
     page_icon="◆",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -1333,9 +1337,11 @@ def save_account_editor_changes(original_df: pd.DataFrame, edited_df: pd.DataFra
         invalidate_cache()
     return changed, errors
 
-def bill_file_name(customer_name: str) -> str:
+def bill_file_name(customer_name: str, bill_id: str = "") -> str:
     safe_name = re.sub(r"[^0-9A-Za-z]+", "_", str(customer_name or "customer")).strip("_").lower()
-    return f"bill_{safe_name or 'customer'}_{date.today()}.pdf"
+    safe_bill_id = re.sub(r"[^0-9A-Za-z]+", "_", str(bill_id or "")).strip("_").lower()
+    prefix = f"{safe_bill_id}_" if safe_bill_id else ""
+    return f"{prefix}bill_{safe_name or 'customer'}_{date.today()}.pdf"
 
 def get_customer_bill_data(df: pd.DataFrame, customer_name: str) -> pd.DataFrame:
     if df.empty or not customer_name:
@@ -1355,6 +1361,87 @@ def bill_paid_date(row: pd.Series) -> str:
             return parsed.strftime("%d %b %Y") if pd.notna(parsed) else value
     return "-"
 
+def bill_totals(hist: pd.DataFrame) -> dict:
+    if hist.empty:
+        return {"total_bill": 0.0, "total_paid": 0.0, "total_pending": 0.0}
+    return {
+        "total_bill": float(hist["selling_price"].map(money_value).sum()),
+        "total_paid": float(hist["amount_paid"].map(money_value).sum()),
+        "total_pending": float(hist["pending_amount"].map(money_value).sum()),
+    }
+
+def get_next_bill_id(bill_date: date | None = None) -> str:
+    bill_date = bill_date or date.today()
+    day_key = bill_date.strftime("%Y%m%d")
+    counter = get_db()["counters"].find_one_and_update(
+        {"_id": f"bill_id_{day_key}"},
+        {"$inc": {"seq": 1}},
+        upsert=True,
+        return_document=True,
+    )
+    return f"SKB-{day_key}-{int(counter['seq']):04d}"
+
+def bill_history_collection():
+    return get_db()["bill_history"]
+
+def build_bill_history_doc(df: pd.DataFrame, customer_name: str, bill_date: date | None = None) -> dict:
+    bill_date = bill_date or date.today()
+    hist = get_customer_bill_data(df, customer_name)
+    if hist.empty:
+        raise ValueError("No purchases found for this customer.")
+
+    totals = bill_totals(hist)
+    bill_id = get_next_bill_id(bill_date)
+    customer_phone = first_nonempty(hist.get("customer_phone", pd.Series(dtype=str)).tolist())
+    rows = []
+    for _, row in hist.iterrows():
+        sale_dt = pd.to_datetime(row.get("sale_date"), errors="coerce")
+        rows.append({
+            "sale_id": int(row.get("id", 0) or 0),
+            "sale_date": str(sale_dt.date()) if pd.notna(sale_dt) else "",
+            "category": clean_text_cell(row.get("product_category")),
+            "description": clean_text_cell(row.get("product_description")),
+            "vendor": clean_text_cell(row.get("vendor")),
+            "bill_amount": round(money_value(row.get("selling_price")), 2),
+            "paid_amount": round(money_value(row.get("amount_paid")), 2),
+            "pending_amount": round(money_value(row.get("pending_amount")), 2),
+            "paid_date": bill_paid_date(row),
+            "status": bill_status(row),
+        })
+
+    return {
+        "bill_id": bill_id,
+        "bill_date": str(bill_date),
+        "customer_name": str(customer_name),
+        "customer_phone": customer_phone,
+        "purchase_count": len(hist),
+        "purchase_ids": [int(v) for v in hist["id"].dropna().tolist()],
+        "items": rows,
+        "total_bill": round(totals["total_bill"], 2),
+        "total_paid": round(totals["total_paid"], 2),
+        "total_pending": round(totals["total_pending"], 2),
+        "upi_id": "9176619942@ybl",
+        "generated_at": str(datetime.now()),
+        "generated_by": st.session_state.get("username", "Admin"),
+    }
+
+def create_bill_history_record(df: pd.DataFrame, customer_name: str, bill_date: date | None = None) -> dict:
+    doc = build_bill_history_doc(df, customer_name, bill_date=bill_date)
+    bill_history_collection().insert_one(doc.copy())
+    return doc
+
+def get_bill_history(search: str = "", limit: int = 100) -> list[dict]:
+    query = {}
+    search = str(search or "").strip()
+    if search:
+        escaped = re.escape(search)
+        query = {"$or": [
+            {"bill_id": {"$regex": escaped, "$options": "i"}},
+            {"customer_name": {"$regex": escaped, "$options": "i"}},
+            {"customer_phone": {"$regex": escaped, "$options": "i"}},
+        ]}
+    return list(bill_history_collection().find(query, {"_id": 0}).sort("generated_at", -1).limit(limit))
+
 def make_upi_qr_png(amount: float = 0.0) -> BytesIO:
     try:
         import qrcode
@@ -1363,7 +1450,7 @@ def make_upi_qr_png(amount: float = 0.0) -> BytesIO:
 
     from urllib.parse import quote
     upi_id = "9176619942@ybl"
-    uri = f"upi://pay?pa={quote(upi_id)}&pn={quote('Vinay Boutique')}&cu=INR"
+    uri = f"upi://pay?pa={quote(upi_id)}&pn={quote(BRAND_NAME)}&cu=INR"
     if amount > 0:
         uri += f"&am={amount:.2f}"
     qr = qrcode.QRCode(box_size=8, border=2)
@@ -1375,7 +1462,7 @@ def make_upi_qr_png(amount: float = 0.0) -> BytesIO:
     out.seek(0)
     return out
 
-def generate_customer_bill_pdf(df: pd.DataFrame, customer_name: str, bill_date: date | None = None) -> BytesIO:
+def generate_customer_bill_pdf(df: pd.DataFrame, customer_name: str, bill_date: date | None = None, bill_id: str = "") -> BytesIO:
     try:
         from reportlab.lib import colors
         from reportlab.lib.enums import TA_CENTER, TA_RIGHT
@@ -1392,9 +1479,10 @@ def generate_customer_bill_pdf(df: pd.DataFrame, customer_name: str, bill_date: 
         raise ValueError("No purchases found for this customer.")
 
     customer_phone = first_nonempty(hist.get("customer_phone", pd.Series(dtype=str)).tolist())
-    total_bill = float(hist["selling_price"].map(money_value).sum())
-    total_paid = float(hist["amount_paid"].map(money_value).sum())
-    total_pending = float(hist["pending_amount"].map(money_value).sum())
+    totals = bill_totals(hist)
+    total_bill = totals["total_bill"]
+    total_paid = totals["total_paid"]
+    total_pending = totals["total_pending"]
 
     out = BytesIO()
     doc = SimpleDocTemplate(
@@ -1413,10 +1501,32 @@ def generate_customer_bill_pdf(df: pd.DataFrame, customer_name: str, bill_date: 
     center_style = ParagraphStyle("Center", parent=styles["Normal"], fontSize=9, alignment=TA_CENTER, textColor=colors.HexColor("#0F172A"))
 
     story = []
+    if os.path.exists(BILL_SYMBOL_PATH):
+        brand_symbol = Image(BILL_SYMBOL_PATH, width=20 * mm, height=20 * mm)
+    else:
+        brand_symbol = Paragraph("<b>SK</b>", center_style)
+    brand_header = Table(
+        [[
+            brand_symbol,
+            [Paragraph(BRAND_NAME, title_style), Paragraph("Customer Purchase Bill", sub_style)],
+        ]],
+        colWidths=[24 * mm, 88 * mm],
+    )
+    brand_header.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+        ("TOPPADDING", (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+    ]))
     header = Table(
         [[
-            [Paragraph("Vinay Boutique", title_style), Paragraph("Customer Purchase Bill", sub_style)],
-            [Paragraph(f"<b>Bill Date:</b> {bill_date.strftime('%d %b %Y')}", right_style), Paragraph(f"<b>UPI:</b> 9176619942@ybl", right_style)],
+            brand_header,
+            [
+                Paragraph(f"<b>Bill ID:</b> {html_escape(bill_id or '-')}", right_style),
+                Paragraph(f"<b>Bill Date:</b> {bill_date.strftime('%d %b %Y')}", right_style),
+                Paragraph(f"<b>UPI:</b> 9176619942@ybl", right_style),
+            ],
         ]],
         colWidths=[112 * mm, 56 * mm],
     )
@@ -1432,9 +1542,10 @@ def generate_customer_bill_pdf(df: pd.DataFrame, customer_name: str, bill_date: 
         [[
             Paragraph(f"<b>Customer:</b> {html_escape(str(customer_name))}", sub_style),
             Paragraph(f"<b>Phone:</b> {html_escape(customer_phone or '-')}", sub_style),
+            Paragraph(f"<b>Bill ID:</b> {html_escape(bill_id or '-')}", sub_style),
             Paragraph(f"<b>Total Purchases:</b> {len(hist)}", sub_style),
         ]],
-        colWidths=[70 * mm, 48 * mm, 50 * mm],
+        colWidths=[54 * mm, 36 * mm, 42 * mm, 36 * mm],
     )
     customer_block.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#F8FAFC")),
@@ -1514,23 +1625,35 @@ def generate_customer_bill_pdf(df: pd.DataFrame, customer_name: str, bill_date: 
     out.seek(0)
     return out
 
-def render_customer_bill_download(df: pd.DataFrame, customer_name: str, key: str, label: str = "Download Bill PDF", bill_date: date | None = None):
-    try:
-        bill_pdf = generate_customer_bill_pdf(df, customer_name, bill_date=bill_date or date.today())
-    except RuntimeError as exc:
-        st.error(str(exc))
-        return
-    except ValueError as exc:
-        st.info(str(exc))
-        return
-    st.download_button(
-        label,
-        data=bill_pdf,
-        file_name=bill_file_name(customer_name),
-        mime="application/pdf",
-        key=key,
-        use_container_width=True,
-    )
+def render_customer_bill_download(df: pd.DataFrame, customer_name: str, key: str, label: str = "Generate Bill PDF", bill_date: date | None = None):
+    state_key = f"{key}_bill_download"
+    if st.button(label, key=f"{key}_create", use_container_width=True):
+        try:
+            bill_doc = create_bill_history_record(df, customer_name, bill_date=bill_date or date.today())
+            bill_pdf = generate_customer_bill_pdf(df, customer_name, bill_date=bill_date or date.today(), bill_id=bill_doc["bill_id"])
+            st.session_state[state_key] = {
+                "bill_id": bill_doc["bill_id"],
+                "customer_name": customer_name,
+                "pdf": bill_pdf.getvalue(),
+            }
+            st.success(f"Bill {bill_doc['bill_id']} generated and saved to history.")
+        except RuntimeError as exc:
+            st.error(str(exc))
+            return
+        except ValueError as exc:
+            st.info(str(exc))
+            return
+
+    payload = st.session_state.get(state_key)
+    if payload:
+        st.download_button(
+            f"Download {payload['bill_id']}",
+            data=payload["pdf"],
+            file_name=bill_file_name(payload["customer_name"], payload["bill_id"]),
+            mime="application/pdf",
+            key=f"{key}_download",
+            use_container_width=True,
+        )
 
 def vendor_picker(label: str, key_prefix: str, current: str = "") -> str:
     current = str(current or "").strip()
@@ -1558,7 +1681,7 @@ def page_add_sale(public=False):
     if public:
         st.markdown("""
         <div class='pub-banner'>
-            <div class='pub-banner-title'>Vinay Boutique</div>
+            <div class='pub-banner-title'>Shree Krishna Boutique</div>
             <div class='pub-banner-sub'>◆ Record a New Sale</div>
         </div>
         """, unsafe_allow_html=True)
@@ -1866,7 +1989,7 @@ def sidebar():
 
         st.markdown("""
         <div class='sb-brand'>
-            <div class='sb-logo' style='font-family:"DM Serif Display",serif'>Vinay</div>
+            <div class='sb-logo' style='font-family:"DM Serif Display",serif'>Shree Krishna</div>
             <div class='sb-mark'>Boutique Manager</div>
         </div>
         """, unsafe_allow_html=True)
@@ -2401,6 +2524,42 @@ def page_generate_bill():
     with dc:
         render_customer_bill_download(df, selected, key=f"bill_page_download_{re.sub(r'[^0-9A-Za-z]+', '_', selected)}", label="Generate Bill PDF", bill_date=bill_dt)
 
+    rule()
+    sec("Bill History")
+    h1, h2 = st.columns([2, 1])
+    with h1:
+        history_search = st.text_input("Search Bill ID / Customer / Phone", key="bill_history_search")
+    with h2:
+        history_limit = st.number_input("Show Last", min_value=10, max_value=500, value=100, step=10, key="bill_history_limit")
+
+    history = get_bill_history(history_search, limit=int(history_limit))
+    if not history:
+        st.info("No generated bills found for this search.")
+        return
+
+    history_df = pd.DataFrame(history)
+    history_show = history_df[["bill_id","customer_name","customer_phone","bill_date","generated_at","purchase_count","total_bill","total_paid","total_pending","generated_by"]].copy()
+    history_show["generated_at"] = pd.to_datetime(history_show["generated_at"], errors="coerce").dt.strftime("%d %b %Y, %I:%M %p").fillna(history_show["generated_at"])
+    history_show.columns = ["Bill ID","Customer","Phone","Bill Date","Generated On","Purchases","Total Bill ₹","Paid ₹","Pending ₹","Generated By"]
+    st.dataframe(history_show, use_container_width=True, hide_index=True)
+
+    selected_bill_id = st.selectbox("View Bill Details", history_show["Bill ID"].tolist(), key="bill_history_detail")
+    selected_doc = next((doc for doc in history if doc.get("bill_id") == selected_bill_id), None)
+    if selected_doc:
+        d1, d2, d3, d4 = st.columns(4)
+        d1.metric("Bill ID", selected_doc.get("bill_id", "—"))
+        d2.metric("Generated", str(selected_doc.get("generated_at", "—"))[:19])
+        d3.metric("Total", f"₹{money_value(selected_doc.get('total_bill')):,.0f}")
+        d4.metric("Pending", f"₹{money_value(selected_doc.get('total_pending')):,.0f}")
+
+        items = selected_doc.get("items", [])
+        if items:
+            items_df = pd.DataFrame(items)
+            item_cols = ["sale_id","sale_date","category","description","vendor","bill_amount","paid_amount","pending_amount","paid_date","status"]
+            items_df = items_df[[c for c in item_cols if c in items_df.columns]].copy()
+            items_df.columns = ["Sale ID","Sale Date","Category","Description","Vendor","Bill ₹","Paid ₹","Pending ₹","Paid Date","Status"][:len(items_df.columns)]
+            st.dataframe(items_df, use_container_width=True, hide_index=True)
+
 
 def page_analytics():
     page_header("Analytics", "Business Intelligence")
@@ -2723,7 +2882,7 @@ def page_backup_restore():
     <div class='bk-header'>
         <span class='bk-header-icon'>🗄️</span>
         <div class='bk-header-title'>Backup &amp; Restore</div>
-        <div class='bk-header-sub'>Database Checkpoint Management · Vinay Boutique</div>
+        <div class='bk-header-sub'>Database Checkpoint Management · Shree Krishna Boutique</div>
     </div>
     """, unsafe_allow_html=True)
 
