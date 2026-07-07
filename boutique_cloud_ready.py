@@ -1401,7 +1401,6 @@ def build_bill_history_doc(df: pd.DataFrame, customer_name: str, bill_date: date
             "sale_date": str(sale_dt.date()) if pd.notna(sale_dt) else "",
             "category": clean_text_cell(row.get("product_category")),
             "description": clean_text_cell(row.get("product_description")),
-            "vendor": clean_text_cell(row.get("vendor")),
             "bill_amount": round(money_value(row.get("selling_price")), 2),
             "paid_amount": round(money_value(row.get("amount_paid")), 2),
             "pending_amount": round(money_value(row.get("pending_amount")), 2),
@@ -1557,7 +1556,7 @@ def generate_customer_bill_pdf(df: pd.DataFrame, customer_name: str, bill_date: 
     story.append(Spacer(1, 10))
     story.append(Paragraph("Bill Contents", ParagraphStyle("Section", parent=styles["Heading2"], fontSize=12, textColor=colors.HexColor("#0F172A"), spaceAfter=6)))
 
-    table_data = [["Date", "Item / Category", "Vendor", "Bill", "Paid", "Paid Date", "Status"]]
+    table_data = [["Date", "Item / Category", "Bill", "Paid", "Paid Date", "Status"]]
     for _, row in hist.iterrows():
         sale_dt = pd.to_datetime(row.get("sale_date"), errors="coerce")
         date_text = sale_dt.strftime("%d %b %Y") if pd.notna(sale_dt) else "-"
@@ -1567,14 +1566,13 @@ def generate_customer_bill_pdf(df: pd.DataFrame, customer_name: str, bill_date: 
         table_data.append([
             date_text,
             Paragraph(item, sub_style),
-            clean_text_cell(row.get("vendor")) or "-",
             f"Rs {money_value(row.get('selling_price')):,.2f}",
             f"Rs {money_value(row.get('amount_paid')):,.2f}",
             bill_paid_date(row),
             bill_status(row),
         ])
 
-    purchase_table = Table(table_data, colWidths=[22 * mm, 48 * mm, 28 * mm, 22 * mm, 22 * mm, 25 * mm, 22 * mm], repeatRows=1)
+    purchase_table = Table(table_data, colWidths=[22 * mm, 76 * mm, 22 * mm, 22 * mm, 25 * mm, 22 * mm], repeatRows=1)
     purchase_table.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#EAF1FF")),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor("#0F172A")),
@@ -1582,8 +1580,8 @@ def generate_customer_bill_pdf(df: pd.DataFrame, customer_name: str, bill_date: 
         ("FONTSIZE", (0, 0), (-1, -1), 8),
         ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#CBD5E1")),
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("ALIGN", (3, 1), (4, -1), "RIGHT"),
-        ("ALIGN", (6, 1), (6, -1), "CENTER"),
+        ("ALIGN", (2, 1), (3, -1), "RIGHT"),
+        ("ALIGN", (5, 1), (5, -1), "CENTER"),
         ("BACKGROUND", (0, 1), (-1, -1), colors.white),
         ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F8FAFC")]),
         ("PADDING", (0, 0), (-1, -1), 5),
@@ -2513,11 +2511,11 @@ def page_generate_bill():
     m4.metric("Pending", f"₹{total_pending:,.0f}")
 
     rule_sm()
-    preview = hist[["sale_date","product_category","product_description","vendor","selling_price","amount_paid","pending_amount","last_payment_date"]].copy()
+    preview = hist[["sale_date","product_category","product_description","selling_price","amount_paid","pending_amount","last_payment_date"]].copy()
     preview["sale_date"] = preview["sale_date"].dt.strftime("%d %b %Y")
     preview["status"] = hist.apply(bill_status, axis=1)
     preview["last_payment_date"] = hist.apply(bill_paid_date, axis=1)
-    preview.columns = ["Date","Category","Description","Vendor","Bill ₹","Paid ₹","Pending ₹","Paid Date","Status"]
+    preview.columns = ["Date","Category","Description","Bill ₹","Paid ₹","Pending ₹","Paid Date","Status"]
     st.dataframe(preview, use_container_width=True, hide_index=True)
 
     dc, _ = st.columns([1, 3])
@@ -2555,9 +2553,9 @@ def page_generate_bill():
         items = selected_doc.get("items", [])
         if items:
             items_df = pd.DataFrame(items)
-            item_cols = ["sale_id","sale_date","category","description","vendor","bill_amount","paid_amount","pending_amount","paid_date","status"]
+            item_cols = ["sale_id","sale_date","category","description","bill_amount","paid_amount","pending_amount","paid_date","status"]
             items_df = items_df[[c for c in item_cols if c in items_df.columns]].copy()
-            items_df.columns = ["Sale ID","Sale Date","Category","Description","Vendor","Bill ₹","Paid ₹","Pending ₹","Paid Date","Status"][:len(items_df.columns)]
+            items_df.columns = ["Sale ID","Sale Date","Category","Description","Bill ₹","Paid ₹","Pending ₹","Paid Date","Status"][:len(items_df.columns)]
             st.dataframe(items_df, use_container_width=True, hide_index=True)
 
 
