@@ -1185,6 +1185,18 @@ def currency_input(label: str, key: str, value: float | None = None) -> tuple[st
     parsed, valid = parse_currency(raw)
     return raw, parsed, valid
 
+def clean_text_cell(value) -> str:
+    text = str(value or "").strip()
+    return "" if text in ("—", "None", "NaT", "nan") else text
+
+def date_cell_to_iso(value, required: bool = False) -> tuple[str, bool]:
+    if value is None or str(value) in ("", "NaT", "nan", "None"):
+        return "", not required
+    parsed = pd.to_datetime(value, errors="coerce")
+    if pd.isna(parsed):
+        return "", False
+    return str(parsed.date()), True
+
 def default_receiver_name() -> str:
     return str(st.session_state.get("username") or "Admin").strip().title()
 
@@ -1232,6 +1244,94 @@ def record_payment(row: pd.Series, payment_amount: float, payment_date: date, pa
     invalidate_cache()
     status = "Payment completed." if new_pending == 0 else f"Partial payment saved. ₹{new_pending:,.2f} still pending."
     return True, status
+
+def save_account_editor_changes(original_df: pd.DataFrame, edited_df: pd.DataFrame) -> tuple[int, list[str]]:
+    originals = original_df.set_index("id", drop=False)
+    changed = 0
+    errors = []
+
+    for _, row in edited_df.iterrows():
+        try:
+            row_id = int(row["ID"])
+        except (TypeError, ValueError):
+            errors.append("One edited row has an invalid ID.")
+            continue
+        if row_id not in originals.index:
+            errors.append(f"Sale #{row_id} was not found.")
+            continue
+
+        sale_date, sale_date_ok = date_cell_to_iso(row.get("Date"), required=True)
+        paid_date, paid_date_ok = date_cell_to_iso(row.get("Paid Date"), required=False)
+        buy = round(money_value(row.get("Buy ₹")), 2)
+        sell = round(money_value(row.get("Sell ₹")), 2)
+        paid = round(money_value(row.get("Paid ₹")), 2)
+        if not sale_date_ok:
+            errors.append(f"Sale #{row_id}: enter a valid sale date.")
+            continue
+        if not paid_date_ok:
+            errors.append(f"Sale #{row_id}: enter a valid paid date or leave it blank.")
+            continue
+        if buy < 0 or sell < 0 or paid < 0:
+            errors.append(f"Sale #{row_id}: amounts cannot be negative.")
+            continue
+        if paid > sell:
+            errors.append(f"Sale #{row_id}: paid amount cannot exceed selling price.")
+            continue
+
+        pending = round(max(sell - paid, 0.0), 2)
+        set_fields = {
+            "customer_name": clean_text_cell(row.get("Customer"))[:120],
+            "customer_phone": normalize_phone(row.get("Phone")),
+            "sale_date": sale_date,
+            "vendor": clean_text_cell(row.get("Vendor"))[:100],
+            "product_category": clean_text_cell(row.get("Category")) or CATEGORIES[0],
+            "buying_price": buy,
+            "selling_price": sell,
+            "amount_paid": paid,
+            "pending_amount": pending,
+            "payment_received": 1 if pending == 0 else 0,
+            "payment_method": clean_text_cell(row.get("Sale Method")) or PAYMENT_METHODS[0],
+            "last_payment_method": clean_text_cell(row.get("Paid Method")),
+            "last_payment_date": paid_date,
+            "last_payment_received_by": clean_text_cell(row.get("Received By"))[:80],
+            "payment_date": paid_date if pending == 0 else "",
+            "updated_at": str(datetime.now()),
+        }
+        if set_fields["product_category"] not in CATEGORIES:
+            errors.append(f"Sale #{row_id}: choose a valid category.")
+            continue
+        if set_fields["payment_method"] not in PAYMENT_METHODS:
+            errors.append(f"Sale #{row_id}: choose a valid sale method.")
+            continue
+        if set_fields["last_payment_method"] and set_fields["last_payment_method"] not in PAYMENT_COLLECTION_METHODS:
+            errors.append(f"Sale #{row_id}: choose a valid paid method.")
+            continue
+
+        current = originals.loc[row_id]
+        comparable = {
+            "customer_name": str(current.get("customer_name", "") or "").strip()[:120],
+            "customer_phone": normalize_phone(current.get("customer_phone", "")),
+            "sale_date": date_cell_to_iso(current.get("sale_date"), required=False)[0],
+            "vendor": str(current.get("vendor", "") or "").strip()[:100],
+            "product_category": str(current.get("product_category", "") or "").strip(),
+            "buying_price": round(money_value(current.get("buying_price")), 2),
+            "selling_price": round(money_value(current.get("selling_price")), 2),
+            "amount_paid": round(money_value(current.get("amount_paid")), 2),
+            "pending_amount": round(money_value(current.get("pending_amount")), 2),
+            "payment_received": int(money_value(current.get("payment_received"))),
+            "payment_method": str(current.get("payment_method", "") or "").strip(),
+            "last_payment_method": str(current.get("last_payment_method", "") or "").strip(),
+            "last_payment_date": date_cell_to_iso(current.get("last_payment_date"), required=False)[0],
+            "last_payment_received_by": str(current.get("last_payment_received_by", "") or "").strip()[:80],
+            "payment_date": date_cell_to_iso(current.get("payment_date"), required=False)[0] if pending == 0 else "",
+        }
+        if any(set_fields[field] != comparable.get(field) for field in comparable):
+            get_col().update_one({"id": row_id}, {"$set": set_fields})
+            changed += 1
+
+    if changed:
+        invalidate_cache()
+    return changed, errors
 
 def vendor_picker(label: str, key_prefix: str, current: str = "") -> str:
     current = str(current or "").strip()
@@ -1727,16 +1827,62 @@ def page_review():
     m5.metric("Avg Margin",   f"{fdf['margin'].mean():.1f}%" if not fdf.empty else "—")
     rule_sm()
 
-    show = fdf[["id","customer_name","customer_phone","sale_date","vendor","product_category","buying_price","selling_price","profit","amount_paid","pending_amount","payment_method","last_payment_method","last_payment_date","last_payment_received_by","delay_status","payment_received"]].copy()
-    show["sale_date"]        = show["sale_date"].dt.strftime("%d %b %Y")
-    show["vendor"] = show["vendor"].fillna("—").replace("", "—")
-    show["last_payment_method"] = show["last_payment_method"].fillna("—").replace("", "—")
-    show["last_payment_date"] = show["last_payment_date"].fillna("—").replace("", "—")
-    show["last_payment_received_by"] = show["last_payment_received_by"].fillna("—").replace("", "—")
-    show["delay_status"]     = show["delay_status"].map({0:"—", 1:"Yes"})
-    show["payment_received"] = show["payment_received"].map({0:"Pending", 1:"Paid"})
-    show.columns = ["ID","Customer","Phone","Date","Vendor","Category","Buy ₹","Sell ₹","Profit ₹","Paid ₹","Pending ₹","Sale Method","Paid Method","Paid Date","Received By","Delayed","Status"]
-    st.dataframe(show, use_container_width=True, hide_index=True)
+    save_message = st.session_state.pop("accounts_save_message", None)
+    if save_message:
+        st.success(save_message)
+
+    editor = fdf[["id","customer_name","customer_phone","sale_date","vendor","product_category","buying_price","selling_price","profit","amount_paid","pending_amount","payment_method","last_payment_method","last_payment_date","last_payment_received_by","payment_received"]].copy()
+    editor["ID"] = editor["id"].astype(int)
+    editor["Customer"] = editor["customer_name"].fillna("").astype(str)
+    editor["Phone"] = editor["customer_phone"].fillna("").astype(str)
+    editor["Date"] = editor["sale_date"].map(lambda value: pd.to_datetime(value, errors="coerce").date() if pd.notna(pd.to_datetime(value, errors="coerce")) else date.today())
+    editor["Vendor"] = editor["vendor"].fillna("").astype(str)
+    editor["Category"] = editor["product_category"].map(lambda value: value if value in CATEGORIES else CATEGORIES[0])
+    editor["Buy ₹"] = editor["buying_price"].map(money_value)
+    editor["Sell ₹"] = editor["selling_price"].map(money_value)
+    editor["Profit ₹"] = editor["profit"].map(money_value)
+    editor["Paid ₹"] = editor["amount_paid"].map(money_value)
+    editor["Pending ₹"] = editor["pending_amount"].map(money_value)
+    editor["Sale Method"] = editor["payment_method"].map(lambda value: value if value in PAYMENT_METHODS else PAYMENT_METHODS[0])
+    editor["Paid Method"] = editor["last_payment_method"].map(lambda value: value if value in PAYMENT_COLLECTION_METHODS else "")
+    editor["Paid Date"] = editor["last_payment_date"].map(lambda value: pd.to_datetime(value, errors="coerce").date() if pd.notna(pd.to_datetime(value, errors="coerce")) else None)
+    editor["Received By"] = editor["last_payment_received_by"].fillna("").astype(str)
+    editor["Status"] = editor["payment_received"].map({0:"Pending", 1:"Paid"}).fillna("Pending")
+    editor = editor[["ID","Customer","Phone","Date","Vendor","Category","Buy ₹","Sell ₹","Profit ₹","Paid ₹","Pending ₹","Sale Method","Paid Method","Paid Date","Received By","Status"]]
+
+    edited_accounts = st.data_editor(
+        editor,
+        use_container_width=True,
+        hide_index=True,
+        num_rows="fixed",
+        disabled=["ID", "Profit ₹", "Pending ₹", "Status"],
+        column_config={
+            "ID": st.column_config.NumberColumn("ID", disabled=True),
+            "Date": st.column_config.DateColumn("Date", format="YYYY-MM-DD", required=True),
+            "Category": st.column_config.SelectboxColumn("Category", options=CATEGORIES, required=True),
+            "Buy ₹": st.column_config.NumberColumn("Buy ₹", min_value=0.0, step=100.0, format="₹ %.2f"),
+            "Sell ₹": st.column_config.NumberColumn("Sell ₹", min_value=0.0, step=100.0, format="₹ %.2f"),
+            "Profit ₹": st.column_config.NumberColumn("Profit ₹", disabled=True, format="₹ %.2f"),
+            "Paid ₹": st.column_config.NumberColumn("Paid ₹", min_value=0.0, step=100.0, format="₹ %.2f"),
+            "Pending ₹": st.column_config.NumberColumn("Pending ₹", disabled=True, format="₹ %.2f"),
+            "Sale Method": st.column_config.SelectboxColumn("Sale Method", options=PAYMENT_METHODS, required=True),
+            "Paid Method": st.column_config.SelectboxColumn("Paid Method", options=[""] + PAYMENT_COLLECTION_METHODS),
+            "Paid Date": st.column_config.DateColumn("Paid Date", format="YYYY-MM-DD"),
+            "Status": st.column_config.TextColumn("Status", disabled=True),
+        },
+        key="accounts_inline_editor",
+    )
+    save_edit_col, _ = st.columns([1, 3])
+    with save_edit_col:
+        if st.button("Save Edited Rows", use_container_width=True):
+            changed, errors = save_account_editor_changes(fdf, edited_accounts)
+            for err in errors:
+                st.error(err)
+            if changed:
+                st.session_state.accounts_save_message = f"Saved {changed} edited row(s)."
+                st.rerun()
+            elif not errors:
+                st.info("No edited rows to save.")
 
     dc, de, _ = st.columns([1,1,2])
     with dc:
