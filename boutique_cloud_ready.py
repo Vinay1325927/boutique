@@ -972,7 +972,10 @@ def styled_fig(fig, height=340):
 CATEGORIES      = ["Sarees","Salwar Suits","Lehengas","Kurtis","Western Wear","Accessories","Kids Wear","Blouse","Fabric","Other"]
 PAYMENT_METHODS = ["Cash","UPI","Card","Bank Transfer","Part Payment","Credit"]
 PAYMENT_COLLECTION_METHODS = ["Cash", "UPI", "Bank Transfer", "Card"]
-BILL_SCOPE_OPTIONS = ["All Transactions", "Pending Transactions"]
+BILL_SCOPE_ALL = "All Transactions"
+BILL_SCOPE_LAST = "Last Transactions"
+BILL_SCOPE_PENDING = "Pending Transactions"
+BILL_SCOPE_OPTIONS = [BILL_SCOPE_ALL, BILL_SCOPE_LAST, BILL_SCOPE_PENDING]
 STATE_OPTIONS   = ["Tamil Nadu","Maharashtra","Karnataka","Delhi","Gujarat","Rajasthan","West Bengal","Uttar Pradesh","Andhra Pradesh","Telangana","Other"]
 VENDOR_MANUAL_OPTION = "Add new vendor..."
 
@@ -1347,13 +1350,28 @@ def bill_file_name(customer_name: str, bill_id: str = "") -> str:
 def normalize_bill_scope(bill_scope: str | None) -> str:
     return bill_scope if bill_scope in BILL_SCOPE_OPTIONS else BILL_SCOPE_OPTIONS[0]
 
-def get_customer_bill_data(df: pd.DataFrame, customer_name: str, bill_scope: str | None = None) -> pd.DataFrame:
+def normalize_bill_limit(bill_limit: int | float | str | None) -> int:
+    try:
+        return max(int(bill_limit), 1)
+    except (TypeError, ValueError):
+        return 5
+
+def bill_scope_label(bill_scope: str | None, bill_limit: int | float | str | None = None) -> str:
+    bill_scope = normalize_bill_scope(bill_scope)
+    if bill_scope == BILL_SCOPE_LAST:
+        return f"Last {normalize_bill_limit(bill_limit)} Transactions"
+    return bill_scope
+
+def get_customer_bill_data(df: pd.DataFrame, customer_name: str, bill_scope: str | None = None, bill_limit: int | float | str | None = None) -> pd.DataFrame:
     if df.empty or not customer_name:
         return pd.DataFrame()
     mask = df["customer_name"].astype(str).str.casefold().eq(str(customer_name).casefold())
     bill_df = df[mask].copy()
-    if normalize_bill_scope(bill_scope) == "Pending Transactions":
+    bill_scope = normalize_bill_scope(bill_scope)
+    if bill_scope == BILL_SCOPE_PENDING:
         bill_df = bill_df[bill_df["pending_amount"].map(money_value) > 0]
+    elif bill_scope == BILL_SCOPE_LAST:
+        bill_df = bill_df.sort_values(["sale_date", "id"], ascending=[False, False]).head(normalize_bill_limit(bill_limit))
     return bill_df.sort_values(["sale_date", "id"], ascending=[True, True]).copy()
 
 def bill_status(row: pd.Series) -> str:
@@ -1391,12 +1409,13 @@ def get_next_bill_id(bill_date: date | None = None) -> str:
 def bill_history_collection():
     return get_db()["bill_history"]
 
-def build_bill_history_doc(df: pd.DataFrame, customer_name: str, bill_date: date | None = None, bill_scope: str | None = None) -> dict:
+def build_bill_history_doc(df: pd.DataFrame, customer_name: str, bill_date: date | None = None, bill_scope: str | None = None, bill_limit: int | float | str | None = None) -> dict:
     bill_date = bill_date or date.today()
     bill_scope = normalize_bill_scope(bill_scope)
-    hist = get_customer_bill_data(df, customer_name, bill_scope=bill_scope)
+    bill_limit = normalize_bill_limit(bill_limit)
+    hist = get_customer_bill_data(df, customer_name, bill_scope=bill_scope, bill_limit=bill_limit)
     if hist.empty:
-        if bill_scope == "Pending Transactions":
+        if bill_scope == BILL_SCOPE_PENDING:
             raise ValueError("No pending transactions found for this customer.")
         raise ValueError("No purchases found for this customer.")
 
@@ -1424,6 +1443,8 @@ def build_bill_history_doc(df: pd.DataFrame, customer_name: str, bill_date: date
         "customer_name": str(customer_name),
         "customer_phone": customer_phone,
         "bill_scope": bill_scope,
+        "bill_limit": bill_limit if bill_scope == BILL_SCOPE_LAST else None,
+        "bill_scope_label": bill_scope_label(bill_scope, bill_limit),
         "purchase_count": len(hist),
         "purchase_ids": [int(v) for v in hist["id"].dropna().tolist()],
         "items": rows,
@@ -1435,8 +1456,8 @@ def build_bill_history_doc(df: pd.DataFrame, customer_name: str, bill_date: date
         "generated_by": st.session_state.get("username", "Admin"),
     }
 
-def create_bill_history_record(df: pd.DataFrame, customer_name: str, bill_date: date | None = None, bill_scope: str | None = None) -> dict:
-    doc = build_bill_history_doc(df, customer_name, bill_date=bill_date, bill_scope=bill_scope)
+def create_bill_history_record(df: pd.DataFrame, customer_name: str, bill_date: date | None = None, bill_scope: str | None = None, bill_limit: int | float | str | None = None) -> dict:
+    doc = build_bill_history_doc(df, customer_name, bill_date=bill_date, bill_scope=bill_scope, bill_limit=bill_limit)
     bill_history_collection().insert_one(doc.copy())
     return doc
 
@@ -1472,7 +1493,7 @@ def make_upi_qr_png(amount: float = 0.0) -> BytesIO:
     out.seek(0)
     return out
 
-def generate_customer_bill_pdf(df: pd.DataFrame, customer_name: str, bill_date: date | None = None, bill_id: str = "", bill_scope: str | None = None) -> BytesIO:
+def generate_customer_bill_pdf(df: pd.DataFrame, customer_name: str, bill_date: date | None = None, bill_id: str = "", bill_scope: str | None = None, bill_limit: int | float | str | None = None) -> BytesIO:
     try:
         from reportlab.lib import colors
         from reportlab.lib.enums import TA_CENTER, TA_RIGHT
@@ -1485,9 +1506,10 @@ def generate_customer_bill_pdf(df: pd.DataFrame, customer_name: str, bill_date: 
 
     bill_date = bill_date or date.today()
     bill_scope = normalize_bill_scope(bill_scope)
-    hist = get_customer_bill_data(df, customer_name, bill_scope=bill_scope)
+    bill_limit = normalize_bill_limit(bill_limit)
+    hist = get_customer_bill_data(df, customer_name, bill_scope=bill_scope, bill_limit=bill_limit)
     if hist.empty:
-        if bill_scope == "Pending Transactions":
+        if bill_scope == BILL_SCOPE_PENDING:
             raise ValueError("No pending transactions found for this customer.")
         raise ValueError("No purchases found for this customer.")
 
@@ -1556,7 +1578,7 @@ def generate_customer_bill_pdf(df: pd.DataFrame, customer_name: str, bill_date: 
             Paragraph(f"<b>Customer:</b> {html_escape(str(customer_name))}", sub_style),
             Paragraph(f"<b>Phone:</b> {html_escape(customer_phone or '-')}", sub_style),
             Paragraph(f"<b>Bill ID:</b> {html_escape(bill_id or '-')}", sub_style),
-            Paragraph(f"<b>Type:</b> {html_escape(bill_scope)}", sub_style),
+            Paragraph(f"<b>Type:</b> {html_escape(bill_scope_label(bill_scope, bill_limit))}", sub_style),
         ]],
         colWidths=[54 * mm, 36 * mm, 42 * mm, 36 * mm],
     )
@@ -1635,21 +1657,26 @@ def generate_customer_bill_pdf(df: pd.DataFrame, customer_name: str, bill_date: 
     out.seek(0)
     return out
 
-def render_customer_bill_download(df: pd.DataFrame, customer_name: str, key: str, label: str = "Generate Bill PDF", bill_date: date | None = None, bill_scope: str | None = None):
+def render_customer_bill_download(df: pd.DataFrame, customer_name: str, key: str, label: str = "Generate Bill PDF", bill_date: date | None = None, bill_scope: str | None = None, bill_limit: int | float | str | None = None):
     if bill_scope is None:
         chosen_scope = st.selectbox("Bill Type", BILL_SCOPE_OPTIONS, key=f"{key}_scope")
     else:
         chosen_scope = normalize_bill_scope(bill_scope)
-    scope_key = re.sub(r"[^0-9A-Za-z]+", "_", chosen_scope).strip("_").lower()
+    if bill_limit is None and chosen_scope == BILL_SCOPE_LAST:
+        chosen_limit = st.number_input("Last Transactions", min_value=1, max_value=100, value=5, step=1, key=f"{key}_limit")
+    else:
+        chosen_limit = normalize_bill_limit(bill_limit)
+    scope_key = re.sub(r"[^0-9A-Za-z]+", "_", bill_scope_label(chosen_scope, chosen_limit)).strip("_").lower()
     state_key = f"{key}_{scope_key}_bill_download"
     if st.button(label, key=f"{key}_create", use_container_width=True):
         try:
-            bill_doc = create_bill_history_record(df, customer_name, bill_date=bill_date or date.today(), bill_scope=chosen_scope)
-            bill_pdf = generate_customer_bill_pdf(df, customer_name, bill_date=bill_date or date.today(), bill_id=bill_doc["bill_id"], bill_scope=chosen_scope)
+            bill_doc = create_bill_history_record(df, customer_name, bill_date=bill_date or date.today(), bill_scope=chosen_scope, bill_limit=chosen_limit)
+            bill_pdf = generate_customer_bill_pdf(df, customer_name, bill_date=bill_date or date.today(), bill_id=bill_doc["bill_id"], bill_scope=chosen_scope, bill_limit=chosen_limit)
             st.session_state[state_key] = {
                 "bill_id": bill_doc["bill_id"],
                 "customer_name": customer_name,
                 "bill_scope": chosen_scope,
+                "bill_limit": chosen_limit if chosen_scope == BILL_SCOPE_LAST else None,
                 "pdf": bill_pdf.getvalue(),
             }
             st.success(f"Bill {bill_doc['bill_id']} generated and saved to history.")
@@ -2511,15 +2538,17 @@ def page_generate_bill():
         total = float(hist["selling_price"].map(money_value).sum()) if not hist.empty else 0.0
         return f"{name} — Pending ₹{pending:,.0f} / Total ₹{total:,.0f}"
 
-    c1, c2, c3 = st.columns([2, 1, 1])
+    c1, c2, c3, c4 = st.columns([2, 1, 1, 1])
     with c1:
         selected = st.selectbox("Customer", customers, format_func=customer_label, key="bill_customer")
     with c2:
         bill_scope = st.selectbox("Bill Type", BILL_SCOPE_OPTIONS, key="bill_scope")
     with c3:
+        bill_limit = st.number_input("Last Transactions", min_value=1, max_value=100, value=5, step=1, key="bill_limit", disabled=bill_scope != BILL_SCOPE_LAST)
+    with c4:
         bill_dt = st.date_input("Bill Date", value=date.today(), key="bill_date")
 
-    hist = get_customer_bill_data(df, selected, bill_scope=bill_scope)
+    hist = get_customer_bill_data(df, selected, bill_scope=bill_scope, bill_limit=bill_limit)
     total_bill = float(hist["selling_price"].map(money_value).sum())
     total_paid = float(hist["amount_paid"].map(money_value).sum())
     total_pending = float(hist["pending_amount"].map(money_value).sum())
@@ -2532,8 +2561,9 @@ def page_generate_bill():
 
     rule_sm()
     if hist.empty:
-        st.info("No pending transactions found for this customer." if bill_scope == "Pending Transactions" else "No purchases found for this customer.")
+        st.info("No pending transactions found for this customer." if bill_scope == BILL_SCOPE_PENDING else "No purchases found for this customer.")
     else:
+        st.caption(f"Bill preview: {bill_scope_label(bill_scope, bill_limit)}")
         preview = hist[["sale_date","product_category","product_description","selling_price","amount_paid","pending_amount","last_payment_date"]].copy()
         preview["sale_date"] = preview["sale_date"].dt.strftime("%d %b %Y")
         preview["status"] = hist.apply(bill_status, axis=1)
@@ -2543,7 +2573,7 @@ def page_generate_bill():
 
     dc, _ = st.columns([1, 3])
     with dc:
-        render_customer_bill_download(df, selected, key=f"bill_page_download_{re.sub(r'[^0-9A-Za-z]+', '_', selected)}", label="Generate Bill PDF", bill_date=bill_dt, bill_scope=bill_scope)
+        render_customer_bill_download(df, selected, key=f"bill_page_download_{re.sub(r'[^0-9A-Za-z]+', '_', selected)}", label="Generate Bill PDF", bill_date=bill_dt, bill_scope=bill_scope, bill_limit=bill_limit)
 
     rule()
     sec("Bill History")
@@ -2562,7 +2592,10 @@ def page_generate_bill():
     if "bill_scope" not in history_df.columns:
         history_df["bill_scope"] = "All Transactions"
     history_df["bill_scope"] = history_df["bill_scope"].fillna("All Transactions")
-    history_show = history_df[["bill_id","customer_name","customer_phone","bill_scope","bill_date","generated_at","purchase_count","total_bill","total_paid","total_pending","generated_by"]].copy()
+    if "bill_scope_label" not in history_df.columns:
+        history_df["bill_scope_label"] = history_df.apply(lambda row: bill_scope_label(row.get("bill_scope"), row.get("bill_limit")), axis=1)
+    history_df["bill_scope_label"] = history_df["bill_scope_label"].fillna(history_df["bill_scope"])
+    history_show = history_df[["bill_id","customer_name","customer_phone","bill_scope_label","bill_date","generated_at","purchase_count","total_bill","total_paid","total_pending","generated_by"]].copy()
     history_show["generated_at"] = pd.to_datetime(history_show["generated_at"], errors="coerce").dt.strftime("%d %b %Y, %I:%M %p").fillna(history_show["generated_at"])
     history_show.columns = ["Bill ID","Customer","Phone","Type","Bill Date","Generated On","Purchases","Total Bill ₹","Paid ₹","Pending ₹","Generated By"]
     st.dataframe(history_show, use_container_width=True, hide_index=True)
