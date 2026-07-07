@@ -1333,6 +1333,205 @@ def save_account_editor_changes(original_df: pd.DataFrame, edited_df: pd.DataFra
         invalidate_cache()
     return changed, errors
 
+def bill_file_name(customer_name: str) -> str:
+    safe_name = re.sub(r"[^0-9A-Za-z]+", "_", str(customer_name or "customer")).strip("_").lower()
+    return f"bill_{safe_name or 'customer'}_{date.today()}.pdf"
+
+def get_customer_bill_data(df: pd.DataFrame, customer_name: str) -> pd.DataFrame:
+    if df.empty or not customer_name:
+        return pd.DataFrame()
+    mask = df["customer_name"].astype(str).str.casefold().eq(str(customer_name).casefold())
+    return df[mask].sort_values(["sale_date", "id"], ascending=[True, True]).copy()
+
+def bill_status(row: pd.Series) -> str:
+    pending = money_value(row.get("pending_amount"))
+    return "PAID [x]" if pending <= 0 else "PENDING"
+
+def bill_paid_date(row: pd.Series) -> str:
+    for field in ("last_payment_date", "payment_date"):
+        value = str(row.get(field, "") or "").strip()
+        if value:
+            parsed = pd.to_datetime(value, errors="coerce")
+            return parsed.strftime("%d %b %Y") if pd.notna(parsed) else value
+    return "-"
+
+def make_upi_qr_png(amount: float = 0.0) -> BytesIO:
+    try:
+        import qrcode
+    except ImportError as exc:
+        raise RuntimeError("Install qrcode[pil] to generate payment QR codes.") from exc
+
+    from urllib.parse import quote
+    upi_id = "9176619942@ybl"
+    uri = f"upi://pay?pa={quote(upi_id)}&pn={quote('Vinay Boutique')}&cu=INR"
+    if amount > 0:
+        uri += f"&am={amount:.2f}"
+    qr = qrcode.QRCode(box_size=8, border=2)
+    qr.add_data(uri)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="black", back_color="white")
+    out = BytesIO()
+    img.save(out, format="PNG")
+    out.seek(0)
+    return out
+
+def generate_customer_bill_pdf(df: pd.DataFrame, customer_name: str, bill_date: date | None = None) -> BytesIO:
+    try:
+        from reportlab.lib import colors
+        from reportlab.lib.enums import TA_CENTER, TA_RIGHT
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+        from reportlab.lib.units import mm
+        from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+    except ImportError as exc:
+        raise RuntimeError("Install reportlab to generate PDF bills.") from exc
+
+    bill_date = bill_date or date.today()
+    hist = get_customer_bill_data(df, customer_name)
+    if hist.empty:
+        raise ValueError("No purchases found for this customer.")
+
+    customer_phone = first_nonempty(hist.get("customer_phone", pd.Series(dtype=str)).tolist())
+    total_bill = float(hist["selling_price"].map(money_value).sum())
+    total_paid = float(hist["amount_paid"].map(money_value).sum())
+    total_pending = float(hist["pending_amount"].map(money_value).sum())
+
+    out = BytesIO()
+    doc = SimpleDocTemplate(
+        out,
+        pagesize=A4,
+        rightMargin=14 * mm,
+        leftMargin=14 * mm,
+        topMargin=12 * mm,
+        bottomMargin=12 * mm,
+        title=f"Bill - {customer_name}",
+    )
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle("BillTitle", parent=styles["Title"], fontName="Helvetica-Bold", fontSize=20, leading=24, textColor=colors.HexColor("#0F172A"), spaceAfter=4)
+    sub_style = ParagraphStyle("BillSub", parent=styles["Normal"], fontSize=9, leading=12, textColor=colors.HexColor("#475569"))
+    right_style = ParagraphStyle("Right", parent=styles["Normal"], fontSize=9, alignment=TA_RIGHT, textColor=colors.HexColor("#475569"))
+    center_style = ParagraphStyle("Center", parent=styles["Normal"], fontSize=9, alignment=TA_CENTER, textColor=colors.HexColor("#0F172A"))
+
+    story = []
+    header = Table(
+        [[
+            [Paragraph("Vinay Boutique", title_style), Paragraph("Customer Purchase Bill", sub_style)],
+            [Paragraph(f"<b>Bill Date:</b> {bill_date.strftime('%d %b %Y')}", right_style), Paragraph(f"<b>UPI:</b> 9176619942@ybl", right_style)],
+        ]],
+        colWidths=[112 * mm, 56 * mm],
+    )
+    header.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+        ("LINEBELOW", (0, 0), (-1, -1), 0.6, colors.HexColor("#CBD5E1")),
+    ]))
+    story.append(header)
+    story.append(Spacer(1, 8))
+
+    customer_block = Table(
+        [[
+            Paragraph(f"<b>Customer:</b> {html_escape(str(customer_name))}", sub_style),
+            Paragraph(f"<b>Phone:</b> {html_escape(customer_phone or '-')}", sub_style),
+            Paragraph(f"<b>Total Purchases:</b> {len(hist)}", sub_style),
+        ]],
+        colWidths=[70 * mm, 48 * mm, 50 * mm],
+    )
+    customer_block.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#F8FAFC")),
+        ("BOX", (0, 0), (-1, -1), 0.6, colors.HexColor("#DBEAFE")),
+        ("INNERGRID", (0, 0), (-1, -1), 0.3, colors.HexColor("#E2E8F0")),
+        ("PADDING", (0, 0), (-1, -1), 7),
+    ]))
+    story.append(customer_block)
+    story.append(Spacer(1, 10))
+    story.append(Paragraph("Bill Contents", ParagraphStyle("Section", parent=styles["Heading2"], fontSize=12, textColor=colors.HexColor("#0F172A"), spaceAfter=6)))
+
+    table_data = [["Date", "Item / Category", "Vendor", "Bill", "Paid", "Paid Date", "Status"]]
+    for _, row in hist.iterrows():
+        sale_dt = pd.to_datetime(row.get("sale_date"), errors="coerce")
+        date_text = sale_dt.strftime("%d %b %Y") if pd.notna(sale_dt) else "-"
+        desc = clean_text_cell(row.get("product_description")) or clean_text_cell(row.get("product_category")) or "-"
+        category = clean_text_cell(row.get("product_category"))
+        item = f"{html_escape(desc)}<br/><font color='#64748B'>{html_escape(category)}</font>"
+        table_data.append([
+            date_text,
+            Paragraph(item, sub_style),
+            clean_text_cell(row.get("vendor")) or "-",
+            f"Rs {money_value(row.get('selling_price')):,.2f}",
+            f"Rs {money_value(row.get('amount_paid')):,.2f}",
+            bill_paid_date(row),
+            bill_status(row),
+        ])
+
+    purchase_table = Table(table_data, colWidths=[22 * mm, 48 * mm, 28 * mm, 22 * mm, 22 * mm, 25 * mm, 22 * mm], repeatRows=1)
+    purchase_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#EAF1FF")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor("#0F172A")),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, -1), 8),
+        ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#CBD5E1")),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("ALIGN", (3, 1), (4, -1), "RIGHT"),
+        ("ALIGN", (6, 1), (6, -1), "CENTER"),
+        ("BACKGROUND", (0, 1), (-1, -1), colors.white),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F8FAFC")]),
+        ("PADDING", (0, 0), (-1, -1), 5),
+    ]))
+    story.append(purchase_table)
+    story.append(Spacer(1, 10))
+
+    qr_buf = make_upi_qr_png(total_pending)
+    totals = Table(
+        [[
+            Image(qr_buf, width=34 * mm, height=34 * mm),
+            [
+                Paragraph("<b>PhonePe / UPI Payment</b>", sub_style),
+                Paragraph("UPI ID: 9176619942@ybl", sub_style),
+                Paragraph(f"QR amount: Rs {total_pending:,.2f}" if total_pending > 0 else "No pending amount", sub_style),
+            ],
+            [
+                Paragraph(f"<b>Total Bill:</b> Rs {total_bill:,.2f}", right_style),
+                Paragraph(f"<b>Total Paid:</b> Rs {total_paid:,.2f}", right_style),
+                Paragraph(f"<b>Total Pending:</b> Rs {total_pending:,.2f}", right_style),
+            ],
+        ]],
+        colWidths=[38 * mm, 62 * mm, 68 * mm],
+    )
+    totals.setStyle(TableStyle([
+        ("BOX", (0, 0), (-1, -1), 0.7, colors.HexColor("#CBD5E1")),
+        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#F8FAFC")),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("PADDING", (0, 0), (-1, -1), 8),
+    ]))
+    story.append(totals)
+    story.append(Spacer(1, 8))
+    if total_pending > 0:
+        story.append(Paragraph(f"Pending amount to be paid: <b>Rs {total_pending:,.2f}</b>", ParagraphStyle("Pending", parent=center_style, fontSize=10, textColor=colors.HexColor("#B91C1C"))))
+    else:
+        story.append(Paragraph("All listed purchases are paid.", ParagraphStyle("Paid", parent=center_style, fontSize=10, textColor=colors.HexColor("#047857"))))
+
+    doc.build(story)
+    out.seek(0)
+    return out
+
+def render_customer_bill_download(df: pd.DataFrame, customer_name: str, key: str, label: str = "Download Bill PDF", bill_date: date | None = None):
+    try:
+        bill_pdf = generate_customer_bill_pdf(df, customer_name, bill_date=bill_date or date.today())
+    except RuntimeError as exc:
+        st.error(str(exc))
+        return
+    except ValueError as exc:
+        st.info(str(exc))
+        return
+    st.download_button(
+        label,
+        data=bill_pdf,
+        file_name=bill_file_name(customer_name),
+        mime="application/pdf",
+        key=key,
+        use_container_width=True,
+    )
+
 def vendor_picker(label: str, key_prefix: str, current: str = "") -> str:
     current = str(current or "").strip()
     vendors = get_existing_vendors()
@@ -1692,6 +1891,7 @@ def sidebar():
             "Customer List",
             "Analytics",
             "Reminders & Alerts",
+            "Generate Bill",
             "Backup & Restore",
             "Logout",
         ], label_visibility="collapsed")
@@ -2154,6 +2354,54 @@ def page_customers():
             styled_fig(fig, 230); st.plotly_chart(fig, use_container_width=True)
 
 
+def page_generate_bill():
+    page_header("Generate Bill", "Customer PDF Statement")
+    df = fetch_all()
+    if df.empty:
+        st.info("No sales available to bill.")
+        return
+
+    customers = sorted([c for c in df["customer_name"].dropna().astype(str).unique() if c.strip()], key=str.casefold)
+    if not customers:
+        st.info("No customers found.")
+        return
+
+    def customer_label(name: str) -> str:
+        hist = get_customer_bill_data(df, name)
+        pending = float(hist["pending_amount"].map(money_value).sum()) if not hist.empty else 0.0
+        total = float(hist["selling_price"].map(money_value).sum()) if not hist.empty else 0.0
+        return f"{name} — Pending ₹{pending:,.0f} / Total ₹{total:,.0f}"
+
+    c1, c2 = st.columns([2, 1])
+    with c1:
+        selected = st.selectbox("Customer", customers, format_func=customer_label, key="bill_customer")
+    with c2:
+        bill_dt = st.date_input("Bill Date", value=date.today(), key="bill_date")
+
+    hist = get_customer_bill_data(df, selected)
+    total_bill = float(hist["selling_price"].map(money_value).sum())
+    total_paid = float(hist["amount_paid"].map(money_value).sum())
+    total_pending = float(hist["pending_amount"].map(money_value).sum())
+
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Purchases", len(hist))
+    m2.metric("Total Bill", f"₹{total_bill:,.0f}")
+    m3.metric("Paid", f"₹{total_paid:,.0f}")
+    m4.metric("Pending", f"₹{total_pending:,.0f}")
+
+    rule_sm()
+    preview = hist[["sale_date","product_category","product_description","vendor","selling_price","amount_paid","pending_amount","last_payment_date"]].copy()
+    preview["sale_date"] = preview["sale_date"].dt.strftime("%d %b %Y")
+    preview["status"] = hist.apply(bill_status, axis=1)
+    preview["last_payment_date"] = hist.apply(bill_paid_date, axis=1)
+    preview.columns = ["Date","Category","Description","Vendor","Bill ₹","Paid ₹","Pending ₹","Paid Date","Status"]
+    st.dataframe(preview, use_container_width=True, hide_index=True)
+
+    dc, _ = st.columns([1, 3])
+    with dc:
+        render_customer_bill_download(df, selected, key=f"bill_page_download_{re.sub(r'[^0-9A-Za-z]+', '_', selected)}", label="Generate Bill PDF", bill_date=bill_dt)
+
+
 def page_analytics():
     page_header("Analytics", "Business Intelligence")
     df = fetch_all()
@@ -2317,7 +2565,7 @@ def page_reminders():
             for _, r in ov.iterrows():
                 with st.expander(f"{r['customer_name']}  ·  ₹{r['pending_amount']:,.0f}  ·  {int(r['days_old'])} days"):
                     row_id = int(r["id"])
-                    ca, cb, cc, cd = st.columns([2,2,1,1])
+                    ca, cb, cc, cd, ce = st.columns([2,2,1,1,1])
                     ca.write(r["sale_date"].strftime("%d %b %Y"))
                     cb.write(r.get("product_category","—"))
                     with cc:
@@ -2327,6 +2575,8 @@ def page_reminders():
                     with cd:
                         if st.button("Remind", key=f"or_{row_id}", use_container_width=True):
                             st.toast(f"Reminder noted for {r['customer_name']}.")
+                    with ce:
+                        render_customer_bill_download(df, r["customer_name"], key=f"overdue_bill_{row_id}", label="Bill PDF")
                     if st.session_state.get("overdue_payment_editor_id") == row_id:
                         st.markdown("<div class='pay-form-note'>Enter full or partial payment details.</div>", unsafe_allow_html=True)
                         with st.form(f"overdue_payment_form_{row_id}"):
@@ -2395,6 +2645,13 @@ def page_reminders():
             show["sale_date"] = show["sale_date"].dt.strftime("%d %b %Y")
             show.columns = ["Customer","Phone","Date","Category","Pending ₹","Days Old"]
             st.dataframe(show, use_container_width=True, hide_index=True)
+            sec("Bill PDFs")
+            for customer in sorted(soon["customer_name"].dropna().astype(str).unique(), key=str.casefold):
+                c1, c2 = st.columns([3, 1])
+                pending_total = float(df[df["customer_name"].astype(str).eq(customer)]["pending_amount"].map(money_value).sum())
+                c1.write(f"**{customer}** · ₹{pending_total:,.2f} pending")
+                with c2:
+                    render_customer_bill_download(df, customer, key=f"upcoming_bill_{re.sub(r'[^0-9A-Za-z]+', '_', customer)}", label="Bill PDF")
 
 
 def page_inventory():
@@ -2762,6 +3019,7 @@ def main():
     elif "Customer"    in page: page_customers()
     elif "Analytics"   in page: page_analytics()
     elif "Reminders"   in page: page_reminders()
+    elif "Generate Bill" in page: page_generate_bill()
     elif "Backup"      in page: page_backup_restore()
     elif "Logout"      in page:
         st.session_state.logged_in = False
