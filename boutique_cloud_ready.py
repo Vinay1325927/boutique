@@ -9,6 +9,7 @@ import os
 import time
 import hmac
 import hashlib
+import re
 from html import escape as html_escape
 import bcrypt
 from dotenv import load_dotenv
@@ -447,6 +448,10 @@ input[type="text"], input[type="number"], input[type="date"], textarea {
 .stTextInput > div > div > input::placeholder,
 .stTextArea > div > div > textarea::placeholder,
 .stDateInput > div > div > input::placeholder { color: var(--dim) !important; -webkit-text-fill-color: var(--dim) !important; }
+
+[data-testid="InputInstructions"] {
+    display: none !important;
+}
 
 /* Date picker calendar popup */
 [data-baseweb="calendar"] {
@@ -916,6 +921,7 @@ def styled_fig(fig, height=340):
 CATEGORIES      = ["Sarees","Salwar Suits","Lehengas","Kurtis","Western Wear","Accessories","Kids Wear","Blouse","Fabric","Other"]
 PAYMENT_METHODS = ["Cash","UPI","Card","Bank Transfer","Part Payment","Credit"]
 STATE_OPTIONS   = ["Tamil Nadu","Maharashtra","Karnataka","Delhi","Gujarat","Rajasthan","West Bengal","Uttar Pradesh","Andhra Pradesh","Telangana","Other"]
+VENDOR_MANUAL_OPTION = "Add new vendor..."
 
 # =====================================================
 # MONGODB
@@ -980,6 +986,10 @@ def fetch_all() -> pd.DataFrame:
 
 def invalidate_cache():
     fetch_all.clear()
+    try:
+        get_existing_vendors.clear()
+    except NameError:
+        pass
 
 def metrics(df: pd.DataFrame) -> dict:
     if df.empty:
@@ -1037,15 +1047,33 @@ def get_existing_customers():
 def get_existing_customers_with_phone():
     pipeline = [
         {"$match": {"customer_name": {"$ne": None, "$ne": ""}}},
+        {"$sort": {"sale_date": -1, "created_at": -1}},
         {"$group": {
             "_id": "$customer_name",
-            "phone": {"$first": "$customer_phone"},
+            "phones": {"$push": "$customer_phone"},
             "visits": {"$sum": 1},
             "last_sale": {"$max": "$sale_date"},
         }},
         {"$sort": {"_id": 1}},
     ]
-    return list(get_col().aggregate(pipeline))
+    customers = list(get_col().aggregate(pipeline))
+    for customer in customers:
+        customer["phone"] = next((str(p).strip() for p in customer.get("phones", []) if str(p or "").strip()), "")
+        customer.pop("phones", None)
+    return customers
+
+@st.cache_data(ttl=60)
+def get_existing_vendors():
+    vendors = set()
+    for collection_name in ("sales", "inventory"):
+        try:
+            for vendor in get_db()[collection_name].distinct("vendor"):
+                vendor = str(vendor or "").strip()
+                if vendor:
+                    vendors.add(vendor)
+        except Exception:
+            pass
+    return sorted(vendors, key=str.casefold)
 
 # =====================================================
 # HELPERS
@@ -1066,6 +1094,58 @@ def rule_sm():
 
 def is_admin():
     return st.session_state.get("logged_in", False)
+
+def normalize_phone(phone: str) -> str:
+    digits = re.sub(r"\D", "", str(phone or ""))
+    if len(digits) == 12 and digits.startswith("91"):
+        digits = digits[2:]
+    elif len(digits) == 11 and digits.startswith("0"):
+        digits = digits[1:]
+    return digits[:20]
+
+def first_nonempty(values) -> str:
+    for value in values:
+        value = str(value or "").strip()
+        if value:
+            return value
+    return ""
+
+def parse_currency(raw: str) -> tuple[float, bool]:
+    text = str(raw or "").strip()
+    if not text:
+        return 0.0, True
+    cleaned = re.sub(r"[₹,\s]", "", text)
+    if not cleaned:
+        return 0.0, True
+    try:
+        value = float(cleaned)
+    except ValueError:
+        return 0.0, False
+    return value, value >= 0
+
+def currency_input(label: str, key: str, value: float | None = None) -> tuple[str, float, bool]:
+    default = "" if value in (None, 0, 0.0) else f"{float(value):.2f}"
+    raw = st.text_input(label, value=default, placeholder="0.00", key=key)
+    parsed, valid = parse_currency(raw)
+    return raw, parsed, valid
+
+def vendor_picker(label: str, key_prefix: str, current: str = "") -> str:
+    current = str(current or "").strip()
+    vendors = get_existing_vendors()
+    options = [""] + vendors
+    if current and current not in options:
+        options.insert(1, current)
+    options.append(VENDOR_MANUAL_OPTION)
+    selected = st.selectbox(
+        label,
+        options,
+        index=options.index(current) if current in options else 0,
+        format_func=lambda value: "Select vendor" if value == "" else value,
+        key=f"{key_prefix}_select",
+    )
+    if selected == VENDOR_MANUAL_OPTION:
+        return st.text_input("New Vendor", value="" if current in vendors else current, key=f"{key_prefix}_manual").strip()
+    return selected.strip()
 
 # =====================================================
 # PUBLIC ADD SALE PAGE
@@ -1128,23 +1208,24 @@ def page_add_sale(public=False):
                 cphone = ""
                 st.text_input("Phone", value="", placeholder="(Admin access required)", disabled=True)
             else:
+                phone_key_seed = "new" if ctype != "Existing Customer" else re.sub(r"[^0-9A-Za-z]+", "_", cname) or "existing"
                 cphone = st.text_input("Phone", value=cphone, placeholder="+91 XXXXXXXXXX",
-                                       disabled=(ctype == "Existing Customer"))
+                                       key=f"sale_phone_{phone_key_seed}")
         with c3:
             sdate = st.date_input("Sale Date", date.today())
 
         sec("Product")
         p1, p2, p3 = st.columns(3)
         with p1: cat  = st.selectbox("Category *", CATEGORIES)
-        with p2: vend = st.text_input("Vendor / Supplier")
+        with p2: vend = vendor_picker("Vendor / Supplier", "sale_vendor")
         with p3: qty  = st.number_input("Quantity", min_value=1, step=1, value=1)
         desc = st.text_area("Description", placeholder="Fabric, colour, design details…", height=70)
 
         sec("Pricing & Payment")
         pr1, pr2, pr3, pr4 = st.columns(4)
-        with pr1: buy      = st.number_input("Buying Price (₹) *",  min_value=0.0, step=100.0, format="%.2f")
-        with pr2: sell     = st.number_input("Selling Price (₹) *", min_value=0.0, step=100.0, format="%.2f")
-        with pr3: paid_amt = st.number_input("Amount Paid (₹)",     min_value=0.0, step=100.0, format="%.2f")
+        with pr1: _, buy, buy_ok           = currency_input("Buying Price (₹) *", "sale_buying_price")
+        with pr2: _, sell, sell_ok         = currency_input("Selling Price (₹) *", "sale_selling_price")
+        with pr3: _, paid_amt, paid_ok     = currency_input("Amount Paid (₹)", "sale_amount_paid")
         with pr4: pm       = st.selectbox("Payment Method", PAYMENT_METHODS)
 
         pending_amt = max(round(sell - paid_amt, 2), 0.0)
@@ -1188,10 +1269,14 @@ def page_add_sale(public=False):
             if len(notes) > MAX["notes"]:   errs.append(f"Notes must be under {MAX['notes']} characters.")
 
             if not cname.strip():  errs.append("Customer name is required.")
-            if buy  <= 0:          errs.append("Buying price must be > 0.")
-            if sell <= 0:          errs.append("Selling price must be > 0.")
-            if paid_amt > sell:    errs.append("Amount paid cannot exceed selling price.")
-            if sell < buy:
+            if not buy_ok:         errs.append("Buying price must be a valid number.")
+            elif buy  <= 0:        errs.append("Buying price must be > 0.")
+            if not sell_ok:        errs.append("Selling price must be a valid number.")
+            elif sell <= 0:        errs.append("Selling price must be > 0.")
+            if not paid_ok:        errs.append("Amount paid must be a valid number.")
+            elif sell_ok and paid_amt > sell:
+                errs.append("Amount paid cannot exceed selling price.")
+            if buy_ok and sell_ok and sell < buy:
                 st.warning("Selling price is below buying price — this sale will be a loss.")
 
             if errs:
@@ -1200,7 +1285,7 @@ def page_add_sale(public=False):
                 get_col().insert_one({
                     "id":                  get_next_id(),
                     "customer_name":       cname.strip()[:120],
-                    "customer_phone":      cphone.strip()[:20],
+                    "customer_phone":      normalize_phone(cphone),
                     "sale_date":           str(sdate),
                     "vendor":              vend.strip()[:100],
                     "product_category":    cat,
@@ -1403,7 +1488,6 @@ def sidebar():
             "Customer List",
             "Analytics",
             "Reminders & Alerts",
-            "Inventory Tracker",
             "Backup & Restore",
             "Logout",
         ], label_visibility="collapsed")
@@ -1511,7 +1595,14 @@ def page_review():
 
     fdf = df.copy()
     if srch:
-        mask = fdf["customer_name"].str.contains(srch, case=False, na=False) | fdf["customer_phone"].astype(str).str.contains(srch, na=False)
+        phone_text = fdf["customer_phone"].astype(str)
+        mask = (
+            fdf["customer_name"].str.contains(srch, case=False, na=False, regex=False)
+            | phone_text.str.contains(srch, case=False, na=False, regex=False)
+        )
+        phone_digits = normalize_phone(srch)
+        if phone_digits:
+            mask = mask | phone_text.map(normalize_phone).str.contains(phone_digits, na=False, regex=False)
         fdf = fdf[mask]
     if catf  != "All": fdf = fdf[fdf["product_category"] == catf]
     if payf  == "Paid":     fdf = fdf[fdf["payment_received"] == 1]
@@ -1570,14 +1661,25 @@ def page_review():
 def page_update():
     page_header("Update", "Edit or Delete a Record")
     c1, c2 = st.columns([2,1])
-    with c1: sname = st.text_input("Search by Customer Name")
+    with c1: sname = st.text_input("Search by Customer Name / Phone")
     with c2: sid   = st.number_input("Or by Sale ID", min_value=0, step=1)
 
     if not sname and sid == 0:
-        st.info("Enter a customer name or sale ID to search.")
+        st.info("Enter a customer name, phone, or sale ID to search.")
         return
 
-    q = ({"customer_name": {"$regex": sname, "$options":"i"}} if sname else {"id": int(sid)})
+    if sname:
+        search_text = sname.strip()
+        phone_digits = normalize_phone(search_text)
+        terms = [
+            {"customer_name": {"$regex": re.escape(search_text), "$options":"i"}},
+            {"customer_phone": {"$regex": re.escape(search_text), "$options":"i"}},
+        ]
+        if phone_digits and phone_digits != search_text:
+            terms.append({"customer_phone": {"$regex": re.escape(phone_digits), "$options":"i"}})
+        q = {"$or": terms}
+    else:
+        q = {"id": int(sid)}
     docs = list(get_col().find(q, {"_id":0}))
     if not docs:
         st.warning("No matching transaction found.")
@@ -1607,7 +1709,7 @@ def page_update():
         with c2:
             ci  = CATEGORIES.index(row["product_category"]) if row.get("product_category") in CATEGORIES else 0
             nc  = st.selectbox("Category", CATEGORIES, index=ci)
-            nv  = st.text_input("Vendor", value=str(row.get("vendor","")))
+            nv  = vendor_picker("Vendor", f"update_vendor_{sel}", str(row.get("vendor","")))
         with c3:
             try:    existing_date = pd.to_datetime(row.get("sale_date")).date()
             except: existing_date = date.today()
@@ -1617,9 +1719,9 @@ def page_update():
         ndesc = st.text_area("Description", value=str(row.get("product_description","")), height=60)
         sec("Pricing & Payment")
         pr1, pr2, pr3, pr4 = st.columns(4)
-        with pr1: nb  = st.number_input("Buying Price (₹)",  value=float(row["buying_price"]),  min_value=0.0, step=100.0, format="%.2f")
-        with pr2: ns  = st.number_input("Selling Price (₹)", value=float(row["selling_price"]), min_value=0.0, step=100.0, format="%.2f")
-        with pr3: npa = st.number_input("Amount Paid (₹)",   value=float(row["amount_paid"]),   min_value=0.0, step=100.0, format="%.2f")
+        with pr1: _, nb, nb_ok   = currency_input("Buying Price (₹)", f"update_buying_price_{sel}", float(row["buying_price"]))
+        with pr2: _, ns, ns_ok   = currency_input("Selling Price (₹)", f"update_selling_price_{sel}", float(row["selling_price"]))
+        with pr3: _, npa, npa_ok = currency_input("Amount Paid (₹)", f"update_amount_paid_{sel}", float(row["amount_paid"]))
         with pr4:
             pi  = PAYMENT_METHODS.index(row["payment_method"]) if row.get("payment_method") in PAYMENT_METHODS else 0
             npm = st.selectbox("Payment Method", PAYMENT_METHODS, index=pi)
@@ -1639,11 +1741,21 @@ def page_update():
         with bd: dlt = st.form_submit_button("Delete Transaction",  use_container_width=True)
 
         if upd:
-            if npa > ns:
-                st.error("Amount paid cannot exceed selling price.")
+            errs = []
+            if not nb_ok:
+                errs.append("Buying price must be a valid number.")
+            if not ns_ok:
+                errs.append("Selling price must be a valid number.")
+            if not npa_ok:
+                errs.append("Amount paid must be a valid number.")
+            if ns_ok and npa_ok and npa > ns:
+                errs.append("Amount paid cannot exceed selling price.")
+            if errs:
+                for err in errs:
+                    st.error(err)
             else:
                 get_col().update_one({"id": sel}, {"$set": {
-                    "customer_name": nn.strip(), "customer_phone": np.strip(),
+                    "customer_name": nn.strip(), "customer_phone": normalize_phone(np),
                     "sale_date": str(new_date), "product_category": nc,
                     "vendor": nv.strip(), "product_description": ndesc.strip(),
                     "quantity": nqty, "buying_price": round(nb,2),
@@ -1666,8 +1778,8 @@ def page_customers():
         st.markdown("<div class='empty'><div class='empty-glyph'>◆</div><div>No customers yet.</div></div>", unsafe_allow_html=True)
         return
 
-    summ = (df.groupby("customer_name").agg(
-        phone=("customer_phone","first"), transactions=("id","count"),
+    summ = (df.sort_values("sale_date", ascending=False).groupby("customer_name").agg(
+        phone=("customer_phone", first_nonempty), transactions=("id","count"),
         spent=("selling_price","sum"), pending=("pending_amount","sum"),
         last_visit=("sale_date","max"), profit=("profit","sum"),
     ).reset_index())
@@ -1687,7 +1799,15 @@ def page_customers():
     with c2: tier_f = st.selectbox("Tier", ["All","Bronze","Silver","Gold","Platinum"])
 
     view = summ.copy()
-    if srch:     view = view[view["customer_name"].str.contains(srch, case=False, na=False)]
+    if srch:
+        phone_digits = normalize_phone(srch)
+        mask = (
+            view["customer_name"].str.contains(srch, case=False, na=False, regex=False)
+            | view["phone"].astype(str).str.contains(srch, case=False, na=False, regex=False)
+        )
+        if phone_digits:
+            mask = mask | view["phone"].astype(str).map(normalize_phone).str.contains(phone_digits, na=False, regex=False)
+        view = view[mask]
     if tier_f != "All": view = view[view["tier"] == tier_f]
 
     disp = view.rename(columns={"customer_name":"Customer","phone":"Phone","transactions":"Visits","spent":"Total Spent ₹","pending":"Pending ₹","last_visit":"Last Visit","profit":"Profit ₹","tier":"Tier"})
@@ -2301,7 +2421,6 @@ def main():
     elif "Customer"    in page: page_customers()
     elif "Analytics"   in page: page_analytics()
     elif "Reminders"   in page: page_reminders()
-    elif "Inventory"   in page: page_inventory()
     elif "Backup"      in page: page_backup_restore()
     elif "Logout"      in page:
         st.session_state.logged_in = False
