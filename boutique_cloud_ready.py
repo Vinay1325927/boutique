@@ -983,13 +983,85 @@ VENDOR_MANUAL_OPTION = "Add new vendor..."
 # MONGODB
 # =====================================================
 
+def safe_secret(key: str, default: str = ""):
+    try:
+        return st.secrets.get(key, default)
+    except Exception:
+        return default
+
+def get_openai_key() -> str:
+    return safe_secret("OPENAI_API_KEY", "") or os.getenv("OPENAI_API_KEY", "")
+
+def get_openai_model() -> str:
+    return safe_secret("OPENAI_MODEL", "") or os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+
+def llm_is_configured() -> bool:
+    return bool(get_openai_key())
+
+def trim_for_ai(text: str, limit: int = 12000) -> str:
+    text = str(text or "")
+    if len(text) <= limit:
+        return text
+    return text[:limit] + "\n\n[Context trimmed]"
+
+def df_for_ai(df: pd.DataFrame, columns: list[str] | None = None, limit: int = 40) -> str:
+    if df is None or df.empty:
+        return "No rows."
+    view = df.copy()
+    if columns:
+        view = view[[col for col in columns if col in view.columns]].copy()
+    for col in view.columns:
+        if pd.api.types.is_datetime64_any_dtype(view[col]):
+            view[col] = view[col].dt.strftime("%Y-%m-%d")
+    return view.head(limit).to_csv(index=False)
+
+def ask_llm(task: str, context: str, temperature: float = 0.2) -> str:
+    api_key = get_openai_key()
+    if not api_key:
+        raise RuntimeError("OPENAI_API_KEY is not configured.")
+    try:
+        from openai import OpenAI
+    except ImportError as exc:
+        raise RuntimeError("Install the openai package to use AI features.") from exc
+
+    client = OpenAI(api_key=api_key)
+    prompt = f"""
+You are an assistant for {BRAND_NAME}, a boutique sales and passbook tracking app.
+Use only the provided app context. If the context is insufficient, say what is missing.
+Keep the answer practical, concise, and in rupees where amounts are present.
+
+Task:
+{task}
+
+Context:
+{trim_for_ai(context)}
+""".strip()
+    response = client.responses.create(
+        model=get_openai_model(),
+        input=prompt,
+        temperature=temperature,
+    )
+    return getattr(response, "output_text", "") or str(response)
+
+def render_ai_panel(title: str, context: str, key: str, default_task: str, expanded: bool = False):
+    with st.expander(title, expanded=expanded):
+        if not llm_is_configured():
+            st.info("AI is not configured. Set OPENAI_API_KEY in credentials/.env or .streamlit/secrets.toml. Optional: set OPENAI_MODEL.")
+            return
+        task = st.text_area("Ask AI", value=default_task, height=90, key=f"{key}_task")
+        if st.button("Run AI", key=f"{key}_run", use_container_width=True):
+            try:
+                with st.spinner("Thinking..."):
+                    st.session_state[f"{key}_answer"] = ask_llm(task, context)
+            except Exception as exc:
+                st.error(str(exc))
+        if st.session_state.get(f"{key}_answer"):
+            st.markdown(st.session_state[f"{key}_answer"])
+
 @st.cache_resource
 def get_mongo_client():
     try:
-        try:
-            uri = st.secrets.get("MONGO_URI", os.getenv("MONGO_URI"))
-        except Exception:
-            uri = os.getenv("MONGO_URI")
+        uri = safe_secret("MONGO_URI", os.getenv("MONGO_URI", ""))
         if not uri:
             st.error("⚠️ MONGO_URI not configured.")
             st.stop()
@@ -1486,6 +1558,25 @@ def extract_passbook_pdf_text(file_bytes: bytes) -> str:
         reader = PdfReader(BytesIO(file_bytes))
         return "\n".join(page.extract_text() or "" for page in reader.pages)
 
+def extract_passbook_pdf_tables(file_bytes: bytes) -> list[list[str]]:
+    try:
+        import pdfplumber
+    except ImportError:
+        return []
+
+    rows = []
+    try:
+        with pdfplumber.open(BytesIO(file_bytes)) as pdf:
+            for page in pdf.pages:
+                for table in page.extract_tables() or []:
+                    for row in table or []:
+                        cleaned = [clean_text_cell(cell) for cell in (row or [])]
+                        if any(cleaned):
+                            rows.append(cleaned)
+    except Exception:
+        return []
+    return rows
+
 def passbook_field(text: str, pattern: str) -> str:
     match = re.search(pattern, text, flags=re.IGNORECASE)
     return clean_text_cell(match.group(1)) if match else ""
@@ -1495,6 +1586,123 @@ def passbook_amount(value: str) -> float:
         return float(str(value or "0").replace(",", ""))
     except ValueError:
         return 0.0
+
+def passbook_date_value(value: str) -> date:
+    parsed = pd.to_datetime(value, format="%d/%m/%Y", errors="coerce")
+    if pd.isna(parsed):
+        parsed = pd.to_datetime(value, dayfirst=True, errors="coerce")
+    return parsed.date() if pd.notna(parsed) else date.today()
+
+def passbook_transaction_name(description: str) -> str:
+    desc = clean_text_cell(description)
+    desc = re.sub(r"^(TO|BY)\s+", "", desc, flags=re.IGNORECASE).strip()
+    parts = [clean_text_cell(part) for part in desc.split("/")]
+    if len(parts) >= 4 and parts[1].upper() in {"DR", "CR"}:
+        return parts[3] or "Unknown"
+    if ":" in desc:
+        return clean_text_cell(desc.split(":", 1)[0]) or "Unknown"
+    return desc[:60] or "Unknown"
+
+def passbook_vendor_key(name: str) -> str:
+    return re.sub(r"\s+", " ", clean_text_cell(name)).strip().casefold()
+
+def passbook_vendor_collection():
+    return get_db()["passbook_vendors"]
+
+def get_saved_passbook_vendors() -> list[str]:
+    docs = list(passbook_vendor_collection().find({}, {"_id": 0, "name": 1}).sort("name", 1))
+    return [clean_text_cell(doc.get("name")) for doc in docs if clean_text_cell(doc.get("name"))]
+
+def save_passbook_vendor(name: str) -> bool:
+    clean_name = clean_text_cell(name)
+    key = passbook_vendor_key(clean_name)
+    if not key:
+        return False
+    passbook_vendor_collection().update_one(
+        {"_id": key},
+        {
+            "$set": {
+                "name": clean_name,
+                "updated_at": str(datetime.now()),
+                "updated_by": st.session_state.get("username", "Admin"),
+            },
+            "$setOnInsert": {"created_at": str(datetime.now())},
+        },
+        upsert=True,
+    )
+    return True
+
+def remove_passbook_vendor(name: str) -> bool:
+    key = passbook_vendor_key(name)
+    if not key:
+        return False
+    passbook_vendor_collection().delete_one({"_id": key})
+    return True
+
+def work_notes_collection():
+    return get_db()["work_notes"]
+
+def get_work_notes(limit: int = 200) -> list[dict]:
+    return list(work_notes_collection().find({}, {"_id": 0}).sort([("work_date", -1), ("created_at", -1)]).limit(limit))
+
+def save_work_note(work_date: date, note: str) -> int:
+    note = clean_text_cell(note)[:1000]
+    existing = work_notes_collection().find_one({}, sort=[("id", -1)], projection={"id": 1, "_id": 0})
+    note_id = int(existing.get("id", 0)) + 1 if existing else 1
+    work_notes_collection().insert_one({
+        "id": note_id,
+        "work_date": str(work_date),
+        "note": note,
+        "created_at": str(datetime.now()),
+        "created_by": st.session_state.get("username", "Admin"),
+    })
+    return note_id
+
+def delete_work_note(note_id: int):
+    work_notes_collection().delete_one({"id": int(note_id)})
+
+def passbook_transaction_row(txn_date: str, description: str, debit: str = "", credit: str = "", balance: str = "") -> dict | None:
+    txn_date = clean_text_cell(txn_date)
+    description = clean_text_cell(description)
+    if not re.match(r"^\d{2}/\d{2}/\d{4}$", txn_date):
+        return None
+    if not re.match(r"^(TO|BY)\b", description, flags=re.IGNORECASE):
+        return None
+    debit_value = passbook_amount(debit)
+    credit_value = passbook_amount(credit)
+    balance_value = passbook_amount(balance)
+    return {
+        "Date": txn_date,
+        "Name": passbook_transaction_name(description),
+        "Description": description,
+        "Debit": debit_value,
+        "Credit": credit_value,
+        "Balance": balance_value,
+    }
+
+def parse_passbook_table_transactions(table_rows: list[list[str]]) -> list[dict]:
+    amount_re = re.compile(r"^\d{1,3}(?:,\d{3})*(?:\.\d{2})$|^\d+(?:\.\d{2})$")
+    rows = []
+    for row in table_rows:
+        cells = [clean_text_cell(cell) for cell in row]
+        if len(cells) < 2:
+            continue
+        if cells[0].upper() == "DATE" or cells[1].upper() == "DESCRIPTION":
+            continue
+        amount_cells = [cell for cell in cells[2:] if amount_re.match(cell)]
+        txn_amount = amount_cells[0] if len(amount_cells) >= 2 else ""
+        balance = amount_cells[-1] if amount_cells else ""
+        direction = cells[1].split(" ", 1)[0].upper() if cells[1] else ""
+        parsed = passbook_transaction_row(
+            cells[0],
+            cells[1],
+            txn_amount if direction == "TO" else "",
+            txn_amount if direction == "BY" else "",
+            balance,
+        )
+        if parsed:
+            rows.append(parsed)
+    return rows
 
 def parse_passbook_transactions(text: str) -> list[dict]:
     amount = r"\d{1,3}(?:,\d{3})*(?:\.\d{2})|\d+(?:\.\d{2})"
@@ -1507,18 +1715,40 @@ def parse_passbook_transactions(text: str) -> list[dict]:
             continue
         txn_date, direction, description, txn_amount, balance = match.groups()
         direction = direction.upper()
-        rows.append({
-            "Date": txn_date,
-            "Description": f"{direction} {description}".strip(),
-            "Debit": passbook_amount(txn_amount) if direction == "TO" else 0.0,
-            "Credit": passbook_amount(txn_amount) if direction == "BY" else 0.0,
-            "Balance": passbook_amount(balance),
-        })
+        full_description = f"{direction} {description}".strip()
+        parsed = passbook_transaction_row(
+            txn_date,
+            full_description,
+            txn_amount if direction == "TO" else "",
+            txn_amount if direction == "BY" else "",
+            balance,
+        )
+        if parsed:
+            rows.append(parsed)
     return rows
+
+def merge_passbook_transactions(*groups: list[dict]) -> list[dict]:
+    merged = []
+    seen = set()
+    for group in groups:
+        for row in group:
+            key = (
+                row.get("Date", ""),
+                row.get("Description", ""),
+                round(money_value(row.get("Debit")), 2),
+                round(money_value(row.get("Credit")), 2),
+                round(money_value(row.get("Balance")), 2),
+            )
+            if key in seen:
+                continue
+            seen.add(key)
+            merged.append(row)
+    return merged
 
 @st.cache_data(show_spinner=False)
 def parse_passbook_pdf(file_bytes: bytes, filename: str) -> dict:
     text = extract_passbook_pdf_text(file_bytes)
+    table_rows = extract_passbook_pdf_tables(file_bytes)
     lines = [re.sub(r"\s+", " ", line).strip() for line in text.splitlines() if str(line).strip()]
 
     customer_name = passbook_field(text, r"CUSTOMER\s+DETAILS\s*:\s*(.+)")
@@ -1540,7 +1770,9 @@ def parse_passbook_pdf(file_bytes: bytes, filename: str) -> dict:
                 branch_address = candidate
             break
 
-    transactions = parse_passbook_transactions(text)
+    table_transactions = parse_passbook_table_transactions(table_rows)
+    text_transactions = parse_passbook_transactions(text)
+    transactions = merge_passbook_transactions(table_transactions, text_transactions)
     total_debit = sum(row["Debit"] for row in transactions)
     total_credit = sum(row["Credit"] for row in transactions)
     latest_balance = transactions[-1]["Balance"] if transactions else 0.0
@@ -1565,16 +1797,16 @@ def parse_passbook_pdf(file_bytes: bytes, filename: str) -> dict:
         "raw_text": text,
     }
 
-def render_passbook_sidebar():
-    st.markdown("#### Passbook Reader")
+def page_passbook_reader():
+    page_header("Passbook Reader", "PDF Statement Extractor")
     uploads = st.file_uploader(
-        "Upload passbook PDF",
+        "Upload Passbook PDF",
         type=["pdf"],
         accept_multiple_files=True,
         key="passbook_pdf_uploads",
     )
     if not uploads:
-        st.caption("Upload one or more passbook PDFs to view account details here.")
+        st.info("Upload one or more passbook PDFs. The app will read account details and build a name filter from the transaction table.")
         return
 
     passbooks = []
@@ -1589,64 +1821,268 @@ def render_passbook_sidebar():
     if not passbooks:
         return
 
-    selected_idx = st.selectbox(
-        "Name Filter",
-        list(range(len(passbooks))),
-        format_func=lambda idx: f"{passbooks[idx].get('customer_name') or 'Unknown'} - {passbooks[idx].get('statement_date') or passbooks[idx].get('account_no_15') or passbooks[idx].get('filename')}",
-        key="passbook_name_filter",
-    )
-    pb = passbooks[selected_idx]
-    txns = pb.get("transactions", [])
+    all_rows = []
+    for idx, pb in enumerate(passbooks):
+        for row in pb.get("transactions", []):
+            row_copy = dict(row)
+            row_copy["Passbook"] = pb.get("customer_name", "Unknown")
+            row_copy["Statement Date"] = pb.get("statement_date", "")
+            row_copy["Account"] = pb.get("account_no_15") or pb.get("account_no") or ""
+            row_copy["_passbook_idx"] = idx
+            all_rows.append(row_copy)
 
-    st.markdown(f"**{pb.get('customer_name', 'Unknown')}**")
-    if pb.get("bank"):
-        st.caption(pb["bank"])
-    p1, p2 = st.columns(2)
-    p1.metric("Credits", f"₹{pb.get('total_credit', 0):,.0f}")
-    p2.metric("Debits", f"₹{pb.get('total_debit', 0):,.0f}")
-    st.metric("Balance", f"₹{pb.get('latest_balance', 0):,.2f}")
+    txn_df = pd.DataFrame(all_rows)
+    saved_vendors = get_saved_passbook_vendors()
+    saved_vendor_keys = {passbook_vendor_key(name) for name in saved_vendors}
 
-    with st.expander("Account Details", expanded=True):
-        detail_rows = [
-            ("File", pb.get("filename", "")),
-            ("Branch", pb.get("branch", "")),
-            ("Branch Address", pb.get("branch_address", "")),
-            ("Account No", pb.get("account_no", "")),
-            ("15 Digit A/C", pb.get("account_no_15", "")),
-            ("IFSC", pb.get("ifsc", "")),
-            ("Account Type", pb.get("account_type", "") or "-"),
-            ("Statement Date", pb.get("statement_date", "")),
-            ("Period", pb.get("statement_period", "")),
-            ("Address", pb.get("address", "")),
-        ]
-        for label, value in detail_rows:
-            if value:
-                st.caption(label)
-                st.write(value)
-
-    with st.expander(f"Transactions ({len(txns)})", expanded=False):
-        if txns:
-            txn_df = pd.DataFrame(txns)
-            st.dataframe(txn_df, use_container_width=True, hide_index=True, height=260)
-            st.download_button(
-                "Download CSV",
-                data=txn_df.to_csv(index=False),
-                file_name=f"passbook_{re.sub(r'[^0-9A-Za-z]+', '_', pb.get('customer_name', 'account')).strip('_').lower()}.csv",
-                mime="text/csv",
-                key=f"passbook_csv_{selected_idx}",
-                use_container_width=True,
-            )
-        else:
-            st.info("No transaction rows detected.")
-
-    with st.expander("Extracted Text", expanded=False):
-        st.text_area(
-            "Raw PDF Text",
-            value=pb.get("raw_text", ""),
-            height=180,
-            disabled=True,
-            key=f"passbook_raw_text_{selected_idx}",
+    f1, f2, f3 = st.columns([1.4, 1.4, 1])
+    with f2:
+        selected_idx = st.selectbox(
+            "Passbook",
+            list(range(len(passbooks))),
+            format_func=lambda idx: f"{passbooks[idx].get('customer_name') or 'Unknown'} - {passbooks[idx].get('statement_date') or passbooks[idx].get('account_no_15') or passbooks[idx].get('filename')}",
+            key="passbook_file_filter",
         )
+    passbook_rows = txn_df[txn_df["_passbook_idx"] == selected_idx].copy() if not txn_df.empty else pd.DataFrame()
+    names = []
+    if not passbook_rows.empty and "Name" in passbook_rows.columns:
+        names = sorted([name for name in passbook_rows["Name"].dropna().astype(str).unique() if name.strip()], key=str.casefold)
+    with f1:
+        selected_name = st.selectbox("Name Filter", ["All Names", "Saved Vendors"] + names, key="passbook_transaction_name_filter")
+    with f3:
+        direction_filter = st.selectbox("Type", ["All", "Credit", "Debit"], key="passbook_direction_filter")
+
+    pb = passbooks[selected_idx]
+    filtered = passbook_rows.copy()
+    if selected_name == "Saved Vendors" and not filtered.empty:
+        filtered = filtered[filtered["Name"].astype(str).map(passbook_vendor_key).isin(saved_vendor_keys)]
+    elif selected_name != "All Names" and not filtered.empty:
+        filtered = filtered[filtered["Name"].astype(str).str.casefold().eq(str(selected_name).casefold())]
+    if direction_filter == "Credit" and not filtered.empty:
+        filtered = filtered[filtered["Credit"].map(money_value) > 0]
+    elif direction_filter == "Debit" and not filtered.empty:
+        filtered = filtered[filtered["Debit"].map(money_value) > 0]
+
+    total_credit = float(filtered["Credit"].map(money_value).sum()) if not filtered.empty else 0.0
+    total_debit = float(filtered["Debit"].map(money_value).sum()) if not filtered.empty else 0.0
+    latest_balance = float(filtered["Balance"].map(money_value).iloc[-1]) if not filtered.empty else 0.0
+
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Rows", len(filtered))
+    m2.metric("Credits", f"₹{total_credit:,.0f}")
+    m3.metric("Debits", f"₹{total_debit:,.0f}")
+    m4.metric("Last Balance", f"₹{latest_balance:,.2f}")
+
+    a1, a2, a3 = st.columns([1, 1, 2])
+    selected_name_key = passbook_vendor_key(selected_name)
+    selected_is_vendor = selected_name_key in saved_vendor_keys
+    with a1:
+        if selected_name not in ["All Names", "Saved Vendors"]:
+            if selected_is_vendor:
+                if st.button("Remove Vendor", key="passbook_remove_vendor", use_container_width=True):
+                    remove_passbook_vendor(selected_name)
+                    st.success(f"{selected_name} removed from saved vendors.")
+                    st.rerun()
+            else:
+                if st.button("Mark as Vendor", key="passbook_mark_vendor", use_container_width=True):
+                    if save_passbook_vendor(selected_name):
+                        st.success(f"{selected_name} saved as vendor.")
+                        st.rerun()
+        else:
+            st.button("Mark as Vendor", key="passbook_mark_vendor_disabled", disabled=True, use_container_width=True)
+    with a2:
+        if saved_vendors:
+            st.metric("Saved Vendors", len(saved_vendors))
+        else:
+            st.metric("Saved Vendors", 0)
+    with a3:
+        if selected_name == "Saved Vendors" and not saved_vendors:
+            st.info("No vendors saved yet. Select a name, then click Mark as Vendor.")
+        elif selected_name == "Saved Vendors":
+            st.caption("Showing transactions for saved vendors only.")
+
+    rule_sm()
+    sec("Transactions")
+    if filtered.empty:
+        st.info("No transaction rows match this filter.")
+    else:
+        show_cols = ["Date", "Name", "Description", "Debit", "Credit", "Balance", "Passbook", "Statement Date", "Account"]
+        show = filtered[[c for c in show_cols if c in filtered.columns]].copy()
+        st.dataframe(show, use_container_width=True, hide_index=True, height=460)
+        safe_name = re.sub(r"[^0-9A-Za-z]+", "_", selected_name if selected_name != "All Names" else pb.get("customer_name", "passbook")).strip("_").lower()
+        st.download_button(
+            "Download Filtered CSV",
+            data=show.to_csv(index=False),
+            file_name=f"passbook_{safe_name or 'transactions'}_{date.today()}.csv",
+            mime="text/csv",
+            use_container_width=True,
+            key="passbook_filtered_csv",
+        )
+        render_ai_panel(
+            "AI Passbook Analysis",
+            "Filtered passbook transactions:\n" + show.to_csv(index=False),
+            "passbook_ai",
+            "Analyze these passbook transactions. Identify vendor/category patterns and suggest how I should convert them into sales records.",
+        )
+
+        rule_sm()
+        sec("Add Sale From Transaction")
+        selectable = show.reset_index(drop=True).copy()
+        selectable["_option"] = selectable.apply(
+            lambda row: f"{row.get('Date', '-')} - {row.get('Name', '-')} - Debit ₹{money_value(row.get('Debit')):,.2f} - Credit ₹{money_value(row.get('Credit')):,.2f}",
+            axis=1,
+        )
+        selected_txn_idx = st.selectbox(
+            "Select Transaction",
+            selectable.index.tolist(),
+            format_func=lambda idx: selectable.loc[idx, "_option"],
+            key="passbook_sale_txn_select",
+        )
+        txn = selectable.loc[selected_txn_idx]
+        txn_amount = money_value(txn.get("Debit")) if money_value(txn.get("Debit")) > 0 else money_value(txn.get("Credit"))
+
+        sale_customer_type = st.radio(
+            "Customer Type",
+            ["Existing Customer", "New Customer"],
+            horizontal=True,
+            key="passbook_sale_customer_type",
+        )
+        existing_customers = get_existing_customers_with_phone()
+        existing_customer_map = {str(customer.get("_id", "")): customer for customer in existing_customers}
+        selected_existing_customer = ""
+        selected_existing_phone = ""
+        if sale_customer_type == "Existing Customer":
+            if existing_customers:
+                selected_existing_customer = st.selectbox(
+                    "Search Existing Customer",
+                    [str(customer.get("_id", "")) for customer in existing_customers],
+                    format_func=lambda name: f"{name} - {existing_customer_map.get(name, {}).get('phone') or 'No phone'}",
+                    key="passbook_sale_existing_customer",
+                )
+                selected_existing_phone = existing_customer_map.get(selected_existing_customer, {}).get("phone", "")
+            else:
+                st.warning("No existing customers found. Use New Customer.")
+                sale_customer_type = "New Customer"
+
+        with st.form("passbook_add_sale_form"):
+            st.caption(f"Vendor, buying price, and sale date are filled from: {txn.get('Description', '')}")
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                if sale_customer_type == "Existing Customer":
+                    sale_customer = st.text_input("Customer Name *", value=selected_existing_customer, disabled=True, key="passbook_sale_customer_existing")
+                else:
+                    sale_customer = st.text_input("Customer Name *", key="passbook_sale_customer_new")
+            with c2:
+                sale_phone = st.text_input("Phone", value=selected_existing_phone, placeholder="+91 XXXXXXXXXX", key=f"passbook_sale_phone_{sale_customer_type.replace(' ', '_').lower()}")
+            with c3:
+                sale_date = st.date_input("Sale Date", value=passbook_date_value(txn.get("Date")), key="passbook_sale_date")
+
+            p1, p2, p3 = st.columns(3)
+            with p1:
+                sale_category = st.selectbox("Category *", CATEGORIES, key="passbook_sale_category")
+            with p2:
+                sale_vendor = st.text_input("Vendor", value=str(txn.get("Name", "") or ""), key="passbook_sale_vendor")
+            with p3:
+                sale_qty = st.number_input("Quantity", min_value=1, step=1, value=1, key="passbook_sale_qty")
+
+            sale_desc = st.text_area("Description", value=str(txn.get("Description", "") or ""), height=70, key="passbook_sale_desc")
+
+            pr1, pr2, pr3, pr4 = st.columns(4)
+            with pr1:
+                sale_buy = st.number_input("Buying Price (₹) *", min_value=0.0, step=1.0, value=float(txn_amount), key="passbook_sale_buy")
+            with pr2:
+                sale_sell = st.number_input("Selling Price (₹) *", min_value=0.0, step=1.0, value=float(txn_amount), key="passbook_sale_sell")
+            with pr3:
+                sale_paid = st.number_input("Amount Paid (₹)", min_value=0.0, step=1.0, value=0.0, key="passbook_sale_paid")
+            with pr4:
+                sale_pm = st.selectbox("Payment Method", PAYMENT_METHODS, index=PAYMENT_METHODS.index("UPI") if "UPI" in PAYMENT_METHODS else 0, key="passbook_sale_payment_method")
+
+            sale_pending = max(round(sale_sell - sale_paid, 2), 0.0)
+            sale_profit = round((sale_sell - sale_buy) * sale_qty, 2)
+            sm1, sm2, sm3 = st.columns(3)
+            sm1.metric("Pending", f"₹{sale_pending:,.2f}")
+            sm2.metric("Profit", f"₹{sale_profit:,.2f}")
+            sm3.metric("Total Value", f"₹{sale_sell * sale_qty:,.2f}")
+
+            sale_notes = st.text_area("Notes", value=f"From passbook transaction: {txn.get('Description', '')}", height=60, key="passbook_sale_notes")
+            save_sale = st.form_submit_button("Save Sale", use_container_width=True)
+
+        if sale_customer_type == "Existing Customer":
+            sale_customer = selected_existing_customer
+            sale_phone = selected_existing_phone
+
+        if save_sale:
+            errs = []
+            if not str(sale_customer or "").strip():
+                errs.append("Customer name is required.")
+            if sale_buy <= 0:
+                errs.append("Buying price must be > 0.")
+            if sale_sell <= 0:
+                errs.append("Selling price must be > 0.")
+            if sale_paid > sale_sell:
+                errs.append("Amount paid cannot exceed selling price.")
+            if not str(sale_vendor or "").strip():
+                errs.append("Vendor is required.")
+            if len(str(sale_customer)) > 120:
+                errs.append("Customer name must be under 120 characters.")
+            if len(str(sale_phone)) > 20:
+                errs.append("Phone number must be under 20 characters.")
+            if len(str(sale_vendor)) > 100:
+                errs.append("Vendor name must be under 100 characters.")
+            if errs:
+                for err in errs:
+                    st.error(err)
+            else:
+                get_col().insert_one({
+                    "id": get_next_id(),
+                    "customer_name": str(sale_customer).strip()[:120],
+                    "customer_phone": normalize_phone(sale_phone),
+                    "sale_date": str(sale_date),
+                    "vendor": str(sale_vendor).strip()[:100],
+                    "product_category": sale_category,
+                    "product_description": str(sale_desc).strip()[:500],
+                    "quantity": int(sale_qty),
+                    "buying_price": round(float(sale_buy), 2),
+                    "selling_price": round(float(sale_sell), 2),
+                    "amount_paid": round(float(sale_paid), 2),
+                    "pending_amount": sale_pending,
+                    "payment_received": 1 if sale_pending == 0 else 0,
+                    "delay_status": 0,
+                    "payment_method": sale_pm,
+                    "notes": str(sale_notes).strip()[:500],
+                    "passbook_source": {
+                        "date": str(txn.get("Date", "")),
+                        "name": str(txn.get("Name", "")),
+                        "description": str(txn.get("Description", "")),
+                        "debit": money_value(txn.get("Debit")),
+                        "credit": money_value(txn.get("Credit")),
+                        "balance": money_value(txn.get("Balance")),
+                    },
+                    "created_at": str(datetime.now()),
+                })
+                invalidate_cache()
+                st.success(f"Sale added for {str(sale_customer).strip()} from passbook transaction.")
+                st.rerun()
+
+    with st.expander("Saved Vendors", expanded=False):
+        if saved_vendors:
+            vendor_df = pd.DataFrame({"Vendor Name": saved_vendors})
+            st.dataframe(vendor_df, use_container_width=True, hide_index=True, height=220)
+            remove_name = st.selectbox("Remove Saved Vendor", saved_vendors, key="passbook_saved_vendor_remove_select")
+            if st.button("Remove Selected Vendor", key="passbook_saved_vendor_remove", use_container_width=True):
+                remove_passbook_vendor(remove_name)
+                st.success(f"{remove_name} removed from saved vendors.")
+                st.rerun()
+        else:
+            st.info("No saved vendors yet.")
+
+    with st.expander("All Names Found", expanded=False):
+        if names:
+            name_counts = txn_df[txn_df["_passbook_idx"] == selected_idx]["Name"].value_counts().reset_index()
+            name_counts.columns = ["Name", "Transactions"]
+            st.dataframe(name_counts, use_container_width=True, hide_index=True, height=320)
+        else:
+            st.info("No names found in the uploaded passbook transactions.")
 
 def make_upi_qr_png(amount: float = 0.0) -> BytesIO:
     try:
@@ -1970,7 +2406,13 @@ def page_add_sale(public=False):
         with pr1: _, buy, buy_ok           = currency_input("Buying Price (₹) *", "sale_buying_price")
         with pr2: _, sell, sell_ok         = currency_input("Selling Price (₹) *", "sale_selling_price")
         with pr3: _, paid_amt, paid_ok     = currency_input("Amount Paid (₹)", "sale_amount_paid")
-        with pr4: pm       = st.selectbox("Payment Method", PAYMENT_METHODS)
+        with pr4:
+            pm = st.selectbox(
+                "Payment Method",
+                PAYMENT_METHODS,
+                index=PAYMENT_METHODS.index("UPI") if "UPI" in PAYMENT_METHODS else 0,
+                key="sale_payment_method",
+            )
 
         pending_amt = max(round(sell - paid_amt, 2), 0.0)
         profit_amt  = round((sell - buy) * qty, 2)
@@ -2070,18 +2512,13 @@ def _get_stored_hash() -> bytes | None:
 
     If none of these are set the function returns None and login is blocked.
     """
-    try:
-        secrets = st.secrets
-    except Exception:
-        secrets = {}
-
     # 1. Pre-hashed secret
-    h = secrets.get("PASSWORD_HASH") or os.getenv("PASSWORD_HASH", "")
+    h = safe_secret("PASSWORD_HASH", "") or os.getenv("PASSWORD_HASH", "")
     if h:
         return h.encode() if isinstance(h, str) else h
 
     # 2. Plain-text secret — hash on the fly (one-time cost per cold start)
-    p = secrets.get("PASSWORD") or os.getenv("PASSWORD", "")
+    p = safe_secret("PASSWORD", "") or os.getenv("PASSWORD", "")
     if p:
         return bcrypt.hashpw(p.encode(), bcrypt.gensalt())
 
@@ -2090,10 +2527,7 @@ def _get_stored_hash() -> bytes | None:
 
 
 def _get_username() -> str | None:
-    try:
-        u = st.secrets.get("USERNAME") or os.getenv("USERNAME", "")
-    except Exception:
-        u = os.getenv("USERNAME", "")
+    u = safe_secret("USERNAME", "") or os.getenv("USERNAME", "")
     return u.strip() or None
 
 
@@ -2213,10 +2647,6 @@ def sidebar():
         """, unsafe_allow_html=True)
         st.markdown("<div class='sb-sep'></div>", unsafe_allow_html=True)
 
-        render_passbook_sidebar()
-
-        st.markdown("<div class='sb-sep'></div>", unsafe_allow_html=True)
-
         df = fetch_all()
         m  = metrics(df)
 
@@ -2237,6 +2667,9 @@ def sidebar():
             "Analytics",
             "Reminders & Alerts",
             "Generate Bill",
+            "Passbook Reader",
+            "Work Notes",
+            "AI Assistant",
             "Backup & Restore",
             "Logout",
         ], label_visibility="collapsed")
@@ -2322,6 +2755,13 @@ def page_dashboard():
         st.download_button("Export CSV", data=df.assign(sale_date=df["sale_date"].astype(str)).to_csv(index=False), file_name=f"boutique_{date.today()}.csv", mime="text/csv", use_container_width=True)
     with db:
         st.download_button("Export Excel", data=to_excel(df), file_name=f"boutique_{date.today()}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+
+    render_ai_panel(
+        "AI Dashboard Summary",
+        build_ai_business_context(),
+        "dashboard_ai",
+        "Summarize the current business status, important risks, and the top 3 actions I should take next.",
+    )
 
 
 def page_review():
@@ -2434,6 +2874,13 @@ def page_review():
         st.download_button("Export CSV", data=fdf.assign(sale_date=fdf["sale_date"].astype(str)).to_csv(index=False), file_name=f"accounts_{date.today()}.csv", mime="text/csv", use_container_width=True)
     with de:
         st.download_button("Export Excel", data=to_excel(fdf), file_name=f"accounts_{date.today()}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+
+    render_ai_panel(
+        "AI Review Current Filter",
+        "Filtered account rows:\n" + df_for_ai(fdf, ["id","customer_name","customer_phone","sale_date","vendor","product_category","selling_price","amount_paid","pending_amount","payment_method"], 60),
+        "review_ai",
+        "Analyze these filtered rows. Call out pending collections, unusual entries, and practical follow-up actions.",
+    )
 
     sec("Mark Payments")
     pend = fdf[fdf["pending_amount"] > 0].sort_values("pending_amount", ascending=False)
@@ -2697,6 +3144,12 @@ def page_customers():
             fig = px.line(hs, x="sale_date", y="cumulative", title=f"Cumulative Spend — {chosen}", markers=True)
             fig.update_traces(line_color="#2E6FD8", marker_color="#4D8AE8", marker_size=5)
             styled_fig(fig, 230); st.plotly_chart(fig, use_container_width=True)
+        render_ai_panel(
+            "AI Customer Summary",
+            f"Customer: {chosen}\nPurchase history:\n{df_for_ai(hist, limit=60)}",
+            "customer_ai",
+            "Summarize this customer's buying pattern, pending amount risk, and what I should do next.",
+        )
 
 
 def page_generate_bill():
@@ -2795,6 +3248,12 @@ def page_generate_bill():
             items_df = items_df[[c for c in item_cols if c in items_df.columns]].copy()
             items_df.columns = ["Sale ID","Sale Date","Category","Description","Bill ₹","Paid ₹","Pending ₹","Paid Date","Status"][:len(items_df.columns)]
             st.dataframe(items_df, use_container_width=True, hide_index=True)
+            render_ai_panel(
+                "AI Bill Message",
+                f"Bill document:\n{pd.DataFrame([selected_doc]).drop(columns=['items'], errors='ignore').to_csv(index=False)}\nItems:\n{items_df.to_csv(index=False)}",
+                "bill_ai",
+                "Draft a short polite customer message for this bill. Mention pending amount if any and keep it WhatsApp-friendly.",
+            )
 
 
 def page_analytics():
@@ -2928,6 +3387,18 @@ def page_analytics():
                 else:
                     st.info("Add product descriptions to see this chart.")
 
+    analytics_context = "\n\n".join([
+        "Monthly summary:\n" + df_for_ai(df.groupby("month").agg(revenue=("selling_price","sum"), profit=("profit","sum"), sales=("id","count")).reset_index(), limit=30),
+        "Category summary:\n" + df_for_ai(df.groupby("product_category").agg(revenue=("selling_price","sum"), profit=("profit","sum"), sales=("id","count")).reset_index(), limit=30),
+        "Payment summary:\n" + df_for_ai(df.groupby("payment_method").agg(count=("id","count"), revenue=("selling_price","sum"), pending=("pending_amount","sum")).reset_index(), limit=30),
+    ])
+    render_ai_panel(
+        "AI Analytics Insights",
+        analytics_context,
+        "analytics_ai",
+        "Explain the strongest business insights from these analytics and give practical next actions.",
+    )
+
 
 def page_reminders():
     page_header("Reminders", "Payment Follow-ups")
@@ -3047,6 +3518,17 @@ def page_reminders():
                 c1.write(f"**{customer}** · ₹{pending_total:,.2f} pending")
                 with c2:
                     render_customer_bill_download(df, customer, key=f"upcoming_bill_{re.sub(r'[^0-9A-Za-z]+', '_', customer)}", label="Bill PDF")
+
+    reminder_context = "\n\n".join([
+        "Overdue rows:\n" + df_for_ai(df[(df["pending_amount"] > 0) & (df["days_old"] > 30)].sort_values("days_old", ascending=False), ["customer_name","customer_phone","sale_date","product_category","pending_amount","days_old"], 40),
+        "Upcoming rows:\n" + df_for_ai(df[(df["pending_amount"] > 0) & (df["days_old"] >= 7) & (df["days_old"] <= 30)].sort_values("days_old", ascending=False), ["customer_name","customer_phone","sale_date","product_category","pending_amount","days_old"], 40),
+    ])
+    render_ai_panel(
+        "AI Follow-up Planner",
+        reminder_context,
+        "reminders_ai",
+        "Prioritize payment follow-ups and draft short WhatsApp reminder message templates.",
+    )
 
 
 def page_inventory():
@@ -3386,6 +3868,108 @@ def page_backup_restore():
     rule_sm()
     st.caption(f"Database last queried: {datetime.now().strftime('%d %b %Y, %I:%M:%S %p')}  ·  Boutique Manager v2.0")
 
+def page_work_notes():
+    page_header("Work Notes", "Manual Last Edited Log")
+
+    notes = get_work_notes()
+    latest = notes[0] if notes else None
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Last Noted Date", latest.get("work_date", "—") if latest else "—")
+    c2.metric("Total Notes", len(notes))
+    c3.metric("Last Saved By", latest.get("created_by", "—") if latest else "—")
+
+    rule_sm()
+    sec("Add Note")
+    with st.form("work_note_form"):
+        d1, d2 = st.columns([1, 2])
+        with d1:
+            work_date = st.date_input("Date You Worked", value=date.today(), key="work_note_date")
+        with d2:
+            note = st.text_input("Note", placeholder="Example: Updated accounts / checked passbook / entered pending payments", key="work_note_text")
+        save_note = st.form_submit_button("Save Note", use_container_width=True)
+
+    if save_note:
+        save_work_note(work_date, note)
+        st.success(f"Saved note for {work_date}.")
+        st.rerun()
+
+    rule_sm()
+    sec("History")
+    notes = get_work_notes()
+    if not notes:
+        st.info("No work notes saved yet.")
+        return
+
+    note_df = pd.DataFrame(notes)
+    show = note_df[["id", "work_date", "note", "created_at", "created_by"]].copy()
+    show["created_at"] = pd.to_datetime(show["created_at"], errors="coerce").dt.strftime("%d %b %Y, %I:%M %p").fillna(show["created_at"])
+    show.columns = ["ID", "Date", "Note", "Saved On", "Saved By"]
+    st.dataframe(show, use_container_width=True, hide_index=True, height=420)
+
+    d1, d2 = st.columns([1, 3])
+    with d1:
+        delete_id = st.selectbox("Delete Note ID", show["ID"].tolist(), key="work_note_delete_id")
+    with d2:
+        st.caption("Delete only removes this manual note. It does not affect sales, bills, vendors, or passbook data.")
+        if st.button("Delete Selected Note", key="work_note_delete", use_container_width=True):
+            delete_work_note(int(delete_id))
+            st.success(f"Deleted note #{delete_id}.")
+            st.rerun()
+
+def build_ai_business_context() -> str:
+    df = fetch_all()
+    m = metrics(df)
+    parts = [
+        f"Today: {date.today()}",
+        f"Metrics: sales={m['sales']}, revenue={m['revenue']:.2f}, profit={m['profit']:.2f}, pending={m['pending']:.2f}, customers={m['customers']}",
+    ]
+    if not df.empty:
+        recent_cols = ["id", "customer_name", "customer_phone", "sale_date", "vendor", "product_category", "selling_price", "amount_paid", "pending_amount", "payment_method", "last_payment_date"]
+        parts.append("Recent sales:\n" + df_for_ai(df.sort_values("sale_date", ascending=False), recent_cols, 30))
+        pending = df[df["pending_amount"].map(money_value) > 0].sort_values("pending_amount", ascending=False)
+        parts.append("Pending sales:\n" + df_for_ai(pending, recent_cols, 30))
+        customer_summary = (df.groupby("customer_name").agg(
+            transactions=("id", "count"),
+            total_spent=("selling_price", "sum"),
+            total_pending=("pending_amount", "sum"),
+            last_sale=("sale_date", "max"),
+        ).reset_index().sort_values("total_pending", ascending=False))
+        parts.append("Customer summary:\n" + df_for_ai(customer_summary, limit=30))
+    try:
+        notes = get_work_notes(20)
+        if notes:
+            parts.append("Recent work notes:\n" + pd.DataFrame(notes).to_csv(index=False))
+    except Exception:
+        pass
+    return "\n\n".join(parts)
+
+def page_ai_assistant():
+    page_header("AI Assistant", "Ask About Boutique Data")
+    if not llm_is_configured():
+        st.info("Set OPENAI_API_KEY in credentials/.env or .streamlit/secrets.toml to enable AI. Optional: set OPENAI_MODEL.")
+        return
+
+    context = build_ai_business_context()
+    quick = st.selectbox("Quick Question", [
+        "Summarize today's business status and what needs attention.",
+        "List customers with the most pending amount and suggest follow-up priority.",
+        "Find sales or vendors that look unusual.",
+        "Draft polite payment reminder messages for pending customers.",
+        "Summarize recent work notes and next actions.",
+        "Custom question",
+    ])
+    default_task = "" if quick == "Custom question" else quick
+    question = st.text_area("Question", value=default_task, height=120, key="global_ai_question")
+    if st.button("Ask AI", key="global_ai_run", use_container_width=True):
+        try:
+            with st.spinner("Thinking..."):
+                st.session_state.global_ai_answer = ask_llm(question, context)
+        except Exception as exc:
+            st.error(str(exc))
+    if st.session_state.get("global_ai_answer"):
+        rule_sm()
+        st.markdown(st.session_state.global_ai_answer)
+
 
 # =====================================================
 # MAIN
@@ -3415,6 +3999,9 @@ def main():
     elif "Analytics"   in page: page_analytics()
     elif "Reminders"   in page: page_reminders()
     elif "Generate Bill" in page: page_generate_bill()
+    elif "Passbook Reader" in page: page_passbook_reader()
+    elif "Work Notes"  in page: page_work_notes()
+    elif "AI Assistant" in page: page_ai_assistant()
     elif "Backup"      in page: page_backup_restore()
     elif "Logout"      in page:
         st.session_state.logged_in = False
