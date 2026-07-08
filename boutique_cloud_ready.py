@@ -10,6 +10,7 @@ import time
 import hmac
 import hashlib
 import re
+import json
 from html import escape as html_escape
 import bcrypt
 from dotenv import load_dotenv
@@ -1104,7 +1105,7 @@ def render_ai_panel(title: str, context: str, key: str, default_task: str, expan
             st.info(ai_setup_message())
             return
         task = st.text_area("Ask AI", value=default_task, height=90, key=f"{key}_task")
-        if st.button("Run AI", key=f"{key}_run", use_container_width=True):
+        if st.button("Run AI", key=f"{key}_run", width="stretch"):
             try:
                 with st.spinner("Thinking..."):
                     st.session_state[f"{key}_answer"] = ask_llm(task, context)
@@ -1112,6 +1113,248 @@ def render_ai_panel(title: str, context: str, key: str, default_task: str, expan
                 st.error(str(exc))
         if st.session_state.get(f"{key}_answer"):
             st.markdown(st.session_state[f"{key}_answer"])
+
+def render_ai_action_panel(title: str, context: str, key: str, actions: dict[str, str], expanded: bool = False):
+    with st.expander(title, expanded=expanded):
+        if not llm_is_configured():
+            st.info(ai_setup_message())
+            return
+        action_names = list(actions.keys()) + ["Custom"]
+        action_name = st.selectbox("AI Action", action_names, key=f"{key}_action")
+        default_task = "" if action_name == "Custom" else actions.get(action_name, "")
+        action_key = re.sub(r"[^0-9A-Za-z]+", "_", action_name).strip("_").lower() or "custom"
+        task = st.text_area("Instruction", value=default_task, height=100, key=f"{key}_task_{action_key}")
+        if st.button("Run AI", key=f"{key}_run", width="stretch"):
+            if not task.strip():
+                st.warning("Enter what you want AI to do.")
+                return
+            try:
+                with st.spinner("Thinking..."):
+                    st.session_state[f"{key}_answer"] = ask_llm(task, context)
+            except Exception as exc:
+                st.error(str(exc))
+        if st.session_state.get(f"{key}_answer"):
+            st.markdown(st.session_state[f"{key}_answer"])
+
+def parse_json_from_ai(text: str) -> dict:
+    raw = str(text or "").strip()
+    if raw.startswith("```"):
+        raw = re.sub(r"^```(?:json)?\s*", "", raw, flags=re.IGNORECASE)
+        raw = re.sub(r"\s*```$", "", raw)
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        start = raw.find("{")
+        end = raw.rfind("}")
+        if start == -1 or end == -1 or end <= start:
+            raise ValueError("AI did not return valid JSON.")
+        parsed = json.loads(raw[start:end + 1])
+    if not isinstance(parsed, dict):
+        raise ValueError("AI response must be a JSON object.")
+    return parsed
+
+def match_option(value, options: list[str]) -> str | None:
+    text = str(value or "").strip()
+    for option in options:
+        if text.casefold() == option.casefold():
+            return option
+    compact = re.sub(r"[^a-z0-9]+", "", text.casefold())
+    for option in options:
+        if compact and compact == re.sub(r"[^a-z0-9]+", "", option.casefold()):
+            return option
+    return None
+
+def bool_from_ai(value) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    return str(value or "").strip().casefold() in {"1", "true", "yes", "y", "paid", "done", "complete"}
+
+def coerce_ai_sale_updates(row: pd.Series, updates: dict) -> tuple[dict, list[str]]:
+    allowed = {
+        "customer_name", "customer_phone", "sale_date", "product_category", "vendor",
+        "product_description", "quantity", "buying_price", "selling_price", "amount_paid",
+        "payment_method", "delay_status", "notes", "payment_received", "last_payment_date",
+        "last_payment_method", "last_payment_received_by",
+    }
+    set_fields = {}
+    warnings = []
+    for key, value in (updates or {}).items():
+        if value is None or str(value).strip() == "":
+            continue
+        if key not in allowed:
+            warnings.append(f"Ignored unsupported field: {key}")
+            continue
+        if key == "customer_name":
+            set_fields[key] = str(value).strip()[:120]
+        elif key == "customer_phone":
+            set_fields[key] = normalize_phone(str(value))[:20]
+        elif key == "sale_date":
+            parsed_date = pd.to_datetime(value, errors="coerce")
+            if pd.isna(parsed_date):
+                warnings.append("Ignored invalid sale_date.")
+            else:
+                set_fields[key] = str(parsed_date.date())
+        elif key == "product_category":
+            matched = match_option(value, CATEGORIES)
+            if matched:
+                set_fields[key] = matched
+            else:
+                warnings.append(f"Ignored invalid category: {value}")
+        elif key == "vendor":
+            set_fields[key] = str(value).strip()[:100]
+        elif key == "product_description":
+            set_fields[key] = str(value).strip()[:500]
+        elif key == "quantity":
+            try:
+                qty = int(float(value))
+                if qty < 1:
+                    raise ValueError
+                set_fields[key] = qty
+            except Exception:
+                warnings.append("Ignored invalid quantity.")
+        elif key in {"buying_price", "selling_price", "amount_paid"}:
+            amount = money_value(value, default=-1)
+            if amount < 0:
+                warnings.append(f"Ignored invalid {key}.")
+            else:
+                set_fields[key] = round(float(amount), 2)
+        elif key == "payment_method":
+            matched = match_option(value, PAYMENT_METHODS)
+            if matched:
+                set_fields[key] = matched
+            else:
+                warnings.append(f"Ignored invalid payment_method: {value}")
+        elif key == "delay_status":
+            set_fields[key] = int(bool_from_ai(value))
+        elif key == "notes":
+            set_fields[key] = str(value).strip()[:500]
+        elif key == "payment_received":
+            set_fields[key] = int(bool_from_ai(value))
+        elif key == "last_payment_date":
+            parsed_date = pd.to_datetime(value, errors="coerce")
+            if pd.isna(parsed_date):
+                warnings.append("Ignored invalid last_payment_date.")
+            else:
+                set_fields[key] = str(parsed_date.date())
+        elif key == "last_payment_method":
+            matched = match_option(value, PAYMENT_COLLECTION_METHODS)
+            if matched:
+                set_fields[key] = matched
+            else:
+                warnings.append(f"Ignored invalid last_payment_method: {value}")
+        elif key == "last_payment_received_by":
+            set_fields[key] = str(value).strip()[:80]
+
+    current_buy = money_value(row.get("buying_price"))
+    current_sell = money_value(row.get("selling_price"))
+    current_paid = money_value(row.get("amount_paid"))
+    buy = money_value(set_fields.get("buying_price", current_buy))
+    sell = money_value(set_fields.get("selling_price", current_sell))
+    paid = money_value(set_fields.get("amount_paid", current_paid))
+
+    if set_fields.get("payment_received") == 1 and "amount_paid" not in set_fields:
+        paid = sell
+        set_fields["amount_paid"] = round(paid, 2)
+    if paid > sell:
+        warnings.append("Amount paid cannot exceed selling price; ignored AI update.")
+        return {}, warnings
+    if sell < buy:
+        warnings.append("AI update creates a loss because selling price is below buying price.")
+
+    if {"buying_price", "selling_price", "amount_paid", "payment_received"} & set(set_fields):
+        pending = max(round(sell - paid, 2), 0.0)
+        set_fields["pending_amount"] = pending
+        set_fields["payment_received"] = 1 if pending == 0 else 0
+
+    if set_fields:
+        set_fields["updated_at"] = str(datetime.now())
+    return set_fields, warnings
+
+def render_ai_update_assistant(row: pd.Series, sale_id: int):
+    with st.expander("AI Update Assistant", expanded=False):
+        if not llm_is_configured():
+            st.info(ai_setup_message())
+            return
+        st.caption("Type updates in plain English. You will see a preview before anything is saved.")
+        instruction = st.text_area(
+            "What should I update?",
+            placeholder="Example: change selling price to 4200, amount paid to 2000, payment method UPI, and notes customer will pay balance next week",
+            height=100,
+            key=f"ai_update_instruction_{sale_id}",
+        )
+        preview_key = f"ai_update_preview_{sale_id}"
+        if st.button("Preview AI Update", key=f"ai_update_preview_btn_{sale_id}", width="stretch"):
+            if not instruction.strip():
+                st.warning("Type what needs to be updated.")
+            else:
+                current_record = row.to_dict()
+                context = "\n".join([
+                    f"Sale ID: {sale_id}",
+                    "Current sale record JSON:",
+                    json.dumps(current_record, default=str, ensure_ascii=False),
+                    "Allowed fields:",
+                    ", ".join([
+                        "customer_name", "customer_phone", "sale_date", "product_category", "vendor",
+                        "product_description", "quantity", "buying_price", "selling_price",
+                        "amount_paid", "payment_method", "delay_status", "notes", "payment_received",
+                        "last_payment_date", "last_payment_method", "last_payment_received_by",
+                    ]),
+                    f"Allowed categories: {', '.join(CATEGORIES)}",
+                    f"Allowed sale payment methods: {', '.join(PAYMENT_METHODS)}",
+                    f"Allowed received payment methods: {', '.join(PAYMENT_COLLECTION_METHODS)}",
+                    "If the user says mark paid, set payment_received true and amount_paid equal to selling_price.",
+                    "If the user gives a partial payment amount, set amount_paid to that amount.",
+                    "Return only JSON in this shape: {\"updates\": {\"field\": \"value\"}, \"reason\": \"short explanation\"}.",
+                ])
+                try:
+                    with st.spinner("Reading your update..."):
+                        raw = ask_llm(instruction, context, temperature=0.0)
+                    parsed = parse_json_from_ai(raw)
+                    set_fields, warnings = coerce_ai_sale_updates(row, parsed.get("updates", {}))
+                    st.session_state[preview_key] = {
+                        "updates": set_fields,
+                        "warnings": warnings,
+                        "reason": str(parsed.get("reason", "") or ""),
+                        "raw": raw,
+                    }
+                except Exception as exc:
+                    st.error(str(exc))
+
+        preview = st.session_state.get(preview_key)
+        if preview:
+            updates = preview.get("updates", {})
+            warnings = preview.get("warnings", [])
+            if preview.get("reason"):
+                st.info(preview["reason"])
+            for warning in warnings:
+                st.warning(warning)
+            if not updates:
+                st.info("No safe update fields were found.")
+                return
+            change_rows = []
+            for field, new_value in updates.items():
+                if field == "updated_at":
+                    continue
+                change_rows.append({
+                    "Field": field,
+                    "Current": row.get(field, ""),
+                    "New": new_value,
+                })
+            st.dataframe(pd.DataFrame(change_rows), hide_index=True, width="stretch")
+            a1, a2 = st.columns(2)
+            with a1:
+                if st.button("Apply AI Update", key=f"ai_update_apply_{sale_id}", type="primary", width="stretch"):
+                    get_col().update_one({"id": int(sale_id)}, {"$set": updates})
+                    invalidate_cache()
+                    st.session_state.pop(preview_key, None)
+                    st.success("AI update applied.")
+                    st.rerun()
+            with a2:
+                if st.button("Clear AI Preview", key=f"ai_update_clear_{sale_id}", width="stretch"):
+                    st.session_state.pop(preview_key, None)
+                    st.rerun()
 
 @st.cache_resource
 def get_mongo_client():
@@ -1973,11 +2216,30 @@ def page_passbook_reader():
             use_container_width=True,
             key="passbook_filtered_csv",
         )
-        render_ai_panel(
-            "AI Passbook Analysis",
+        passbook_context = "\n\n".join([
+            f"Selected passbook customer: {pb.get('customer_name', 'Unknown')}",
+            f"Statement date: {pb.get('statement_date', '')}",
+            f"Account: {pb.get('account_no_15') or pb.get('account_no') or ''}",
+            f"Selected name filter: {selected_name}",
+            f"Selected type filter: {direction_filter}",
+            "Account details:\n" + pd.DataFrame([
+                {"Field": k, "Value": v}
+                for k, v in pb.items()
+                if k not in {"transactions", "raw_text"}
+            ]).to_csv(index=False),
             "Filtered passbook transactions:\n" + show.to_csv(index=False),
+        ])
+        render_ai_action_panel(
+            "AI PDF Extraction Assistant",
+            passbook_context,
             "passbook_ai",
-            "Analyze these passbook transactions. Identify vendor/category patterns and suggest how I should convert them into sales records.",
+            {
+                "Summarize transactions": "Summarize these filtered passbook transactions. Give total debit, total credit, repeated names, and anything that needs attention.",
+                "Find vendor payments": "Identify which rows look like boutique vendor purchases. Group by name, total the debit amount, and suggest which names I should save as vendors.",
+                "Suggest sale entries": "Suggest which debit transactions can be converted into boutique sale records. For each one, suggest vendor, category, buying price, and notes.",
+                "Check extraction quality": "Check whether names, dates, debits, credits, and balances look extracted correctly. List suspicious or missing values only.",
+                "Categorize names": "Group the transaction names into likely categories such as boutique vendor, household expense, bank charge, food/grocery, transfer, or unknown.",
+            },
         )
 
         rule_sm()
@@ -2549,11 +2811,43 @@ def page_add_sale(public=False):
 
     if not public:
         recent_sales = fetch_all()
-        render_ai_panel(
-            "AI Sale Helper",
-            "Recent sales for pricing/category reference:\n" + df_for_ai(recent_sales.sort_values("sale_date", ascending=False) if not recent_sales.empty else recent_sales, ["sale_date","customer_name","vendor","product_category","product_description","buying_price","selling_price","profit","payment_method"], 40),
+        current_sale_context = "\n".join([
+            "Current sale form values:",
+            f"Customer type: {ctype}",
+            f"Customer name: {cname}",
+            f"Phone: {cphone}",
+            f"Sale date: {sdate}",
+            f"Category: {cat}",
+            f"Vendor: {vend}",
+            f"Quantity: {qty}",
+            f"Description: {desc}",
+            f"Buying price: {buy}",
+            f"Selling price: {sell}",
+            f"Amount paid: {paid_amt}",
+            f"Payment method: {pm}",
+            f"Pending amount: {pending_amt}",
+            f"Profit: {profit_amt}",
+            f"Margin percent: {margin_pct}",
+            f"Notes: {notes}",
+            "",
+            "Recent sales for pricing/category reference:",
+            df_for_ai(
+                recent_sales.sort_values("sale_date", ascending=False) if not recent_sales.empty else recent_sales,
+                ["sale_date","customer_name","vendor","product_category","product_description","buying_price","selling_price","profit","payment_method"],
+                40,
+            ),
+        ])
+        render_ai_action_panel(
+            "AI Add Sale Assistant",
+            current_sale_context,
             "add_sale_ai",
-            "Use recent sales to suggest pricing/category/vendor guidance for a new sale. Keep it practical.",
+            {
+                "Check sale entry": "Check the current sale entry for missing fields, pricing mistakes, low margin, pending risk, and cleanup suggestions.",
+                "Suggest selling price": "Using recent sales and the current buying price/category/vendor, suggest a practical selling price and explain the margin.",
+                "Improve description": "Rewrite the product description and notes in a clean boutique style without adding facts that are not present.",
+                "Find similar sales": "Find similar recent sales by vendor, category, description, or price. Summarize what price was used before.",
+                "Payment follow-up": "If there is pending amount, draft a short polite WhatsApp payment follow-up message for the customer.",
+            },
         )
 
 # =====================================================
@@ -3063,6 +3357,8 @@ def page_update():
 
     sel = st.selectbox("Select ID to Edit", df["id"].tolist(), format_func=lambda x: f"#{x} — {df[df['id']==x]['customer_name'].values[0]}")
     row = df[df["id"] == sel].iloc[0]
+    rule_sm()
+    render_ai_update_assistant(row, int(sel))
     rule_sm()
 
     with st.form("update_form"):
