@@ -1272,6 +1272,253 @@ def coerce_ai_sale_updates(row: pd.Series, updates: dict) -> tuple[dict, list[st
         set_fields["updated_at"] = str(datetime.now())
     return set_fields, warnings
 
+def coerce_ai_new_sale_draft(draft: dict) -> tuple[dict, list[str]]:
+    fields = {}
+    warnings = []
+    existing_customers = get_existing_customers_with_phone()
+    customer_by_key = {
+        re.sub(r"[^a-z0-9]+", "", str(customer.get("_id", "")).casefold()): customer
+        for customer in existing_customers
+    }
+
+    name = str(draft.get("customer_name", "") or "").strip()
+    name_key = re.sub(r"[^a-z0-9]+", "", name.casefold())
+    matched_customer = customer_by_key.get(name_key) if name_key else None
+    if matched_customer:
+        name = str(matched_customer.get("_id", "") or name).strip()
+    fields["customer_name"] = name[:120]
+
+    phone = str(draft.get("customer_phone", "") or "").strip()
+    if not phone and matched_customer:
+        phone = str(matched_customer.get("phone", "") or "")
+    fields["customer_phone"] = normalize_phone(phone)[:20]
+
+    parsed_date = pd.to_datetime(draft.get("sale_date") or date.today(), errors="coerce")
+    fields["sale_date"] = str(parsed_date.date() if pd.notna(parsed_date) else date.today())
+
+    category = match_option(draft.get("product_category"), CATEGORIES)
+    if not category:
+        category = "Other"
+        if draft.get("product_category"):
+            warnings.append(f"Category was not recognized, using Other instead of {draft.get('product_category')}.")
+    fields["product_category"] = category
+
+    fields["vendor"] = str(draft.get("vendor", "") or "").strip()[:100]
+    fields["product_description"] = str(draft.get("product_description", "") or "").strip()[:500]
+
+    try:
+        qty = int(float(draft.get("quantity", 1) or 1))
+        fields["quantity"] = max(qty, 1)
+    except Exception:
+        fields["quantity"] = 1
+        warnings.append("Quantity was invalid, using 1.")
+
+    fields["buying_price"] = round(money_value(draft.get("buying_price"), default=0), 2)
+    fields["selling_price"] = round(money_value(draft.get("selling_price"), default=0), 2)
+    fields["amount_paid"] = round(money_value(draft.get("amount_paid"), default=0), 2)
+
+    if bool_from_ai(draft.get("payment_received")) and fields["amount_paid"] <= 0 and fields["selling_price"] > 0:
+        fields["amount_paid"] = fields["selling_price"]
+
+    if fields["amount_paid"] > fields["selling_price"] and fields["selling_price"] > 0:
+        fields["amount_paid"] = fields["selling_price"]
+        warnings.append("Amount paid was above selling price, capped to selling price.")
+
+    payment_method = match_option(draft.get("payment_method"), PAYMENT_METHODS) or "UPI"
+    fields["payment_method"] = payment_method
+    fields["notes"] = str(draft.get("notes", "") or "").strip()[:500]
+
+    fields["pending_amount"] = max(round(fields["selling_price"] - fields["amount_paid"], 2), 0.0)
+    fields["payment_received"] = 1 if fields["pending_amount"] == 0 and fields["selling_price"] > 0 else 0
+    fields["delay_status"] = int(bool_from_ai(draft.get("delay_status")))
+
+    if not fields["customer_name"]:
+        warnings.append("Customer name is missing.")
+    if fields["buying_price"] <= 0:
+        warnings.append("Buying price is missing or zero.")
+    if fields["selling_price"] <= 0:
+        warnings.append("Selling price is missing or zero.")
+    if fields["selling_price"] and fields["buying_price"] and fields["selling_price"] < fields["buying_price"]:
+        warnings.append("Selling price is below buying price.")
+
+    return fields, warnings
+
+def save_sale_record(fields: dict, source: str = "manual") -> int:
+    sale_id = get_next_id()
+    get_col().insert_one({
+        "id":                  sale_id,
+        "customer_name":       str(fields.get("customer_name", "")).strip()[:120],
+        "customer_phone":      normalize_phone(fields.get("customer_phone", "")),
+        "sale_date":           str(fields.get("sale_date") or date.today()),
+        "vendor":              str(fields.get("vendor", "")).strip()[:100],
+        "product_category":    fields.get("product_category") or "Other",
+        "product_description": str(fields.get("product_description", "")).strip()[:500],
+        "quantity":            int(fields.get("quantity") or 1),
+        "buying_price":        round(money_value(fields.get("buying_price")), 2),
+        "selling_price":       round(money_value(fields.get("selling_price")), 2),
+        "amount_paid":         round(money_value(fields.get("amount_paid")), 2),
+        "pending_amount":      round(money_value(fields.get("pending_amount")), 2),
+        "payment_received":    int(fields.get("payment_received") or 0),
+        "delay_status":        int(fields.get("delay_status") or 0),
+        "payment_method":      fields.get("payment_method") if fields.get("payment_method") in PAYMENT_METHODS else "UPI",
+        "notes":               str(fields.get("notes", "")).strip()[:500],
+        "created_via":         source,
+        "created_at":          str(datetime.now()),
+    })
+    invalidate_cache()
+    return sale_id
+
+def render_ai_sale_entry_assistant():
+    if not llm_is_configured():
+        with st.expander("AI Add Sale", expanded=False):
+            st.info(ai_setup_message())
+        return
+
+    sec("AI Add Sale")
+    st.caption("Type the sale in one line. AI will extract a draft, then you can check and save it.")
+    brief = st.text_area(
+        "Sale brief",
+        placeholder="Example: Ramya bought saree from RUPALI. Buying 1495, selling 1895, paid 500 by UPI, balance pending.",
+        height=95,
+        key="ai_sale_brief",
+    )
+    b1, b2 = st.columns([1, 1])
+    with b1:
+        if st.button("Create Sale Draft", key="ai_sale_create_draft", type="primary", width="stretch"):
+            if not brief.strip():
+                st.warning("Type the sale details first.")
+            else:
+                existing_customers = get_existing_customers_with_phone()
+                existing_context = pd.DataFrame([
+                    {"customer_name": c.get("_id", ""), "phone": c.get("phone", ""), "visits": c.get("visits", 0)}
+                    for c in existing_customers[:80]
+                ]).to_csv(index=False)
+                recent_sales = fetch_all()
+                context = "\n".join([
+                    f"Today is {date.today()}.",
+                    "The user is describing one boutique sale. Extract fields from the text. Do not invent unknown prices.",
+                    "If payment method is not mentioned, use UPI. If paid/full paid, amount_paid should equal selling_price.",
+                    "If only pending/balance is mentioned, calculate amount_paid as selling_price minus pending amount.",
+                    "Use an existing customer name exactly if the brief matches one.",
+                    f"Allowed categories: {', '.join(CATEGORIES)}",
+                    f"Allowed payment methods: {', '.join(PAYMENT_METHODS)}",
+                    "Existing customers:\n" + existing_context,
+                    "Recent sales:\n" + df_for_ai(
+                        recent_sales.sort_values("sale_date", ascending=False) if not recent_sales.empty else recent_sales,
+                        ["sale_date","customer_name","vendor","product_category","product_description","buying_price","selling_price","payment_method"],
+                        30,
+                    ),
+                    "Return only JSON in this shape:",
+                    '{"sale": {"customer_name": "", "customer_phone": "", "sale_date": "", "product_category": "", "vendor": "", "product_description": "", "quantity": 1, "buying_price": 0, "selling_price": 0, "amount_paid": 0, "payment_method": "UPI", "notes": ""}, "reason": "short explanation"}',
+                ])
+                try:
+                    with st.spinner("Creating sale draft..."):
+                        raw = ask_llm(brief, context, temperature=0.0)
+                    parsed = parse_json_from_ai(raw)
+                    fields, warnings = coerce_ai_new_sale_draft(parsed.get("sale", {}))
+                    st.session_state.ai_sale_draft = {
+                        "fields": fields,
+                        "warnings": warnings,
+                        "reason": str(parsed.get("reason", "") or ""),
+                    }
+                except Exception as exc:
+                    st.error(str(exc))
+    with b2:
+        if st.button("Clear AI Draft", key="ai_sale_clear_draft", width="stretch"):
+            st.session_state.pop("ai_sale_draft", None)
+            st.rerun()
+
+    draft = st.session_state.get("ai_sale_draft")
+    if not draft:
+        return
+
+    fields = draft.get("fields", {})
+    if draft.get("reason"):
+        st.info(draft["reason"])
+    for warning in draft.get("warnings", []):
+        st.warning(warning)
+
+    with st.form("ai_sale_save_form"):
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            customer_name = st.text_input("Customer Name *", value=str(fields.get("customer_name", "")), key="ai_sale_customer_name")
+        with c2:
+            customer_phone = st.text_input("Phone", value=str(fields.get("customer_phone", "")), key="ai_sale_customer_phone")
+        with c3:
+            sale_dt = pd.to_datetime(fields.get("sale_date"), errors="coerce")
+            sale_date_value = sale_dt.date() if pd.notna(sale_dt) else date.today()
+            sale_date = st.date_input("Sale Date", value=sale_date_value, key="ai_sale_date")
+
+        p1, p2, p3 = st.columns(3)
+        with p1:
+            category_index = CATEGORIES.index(fields.get("product_category")) if fields.get("product_category") in CATEGORIES else CATEGORIES.index("Other")
+            product_category = st.selectbox("Category *", CATEGORIES, index=category_index, key="ai_sale_category")
+        with p2:
+            vendor = st.text_input("Vendor / Supplier", value=str(fields.get("vendor", "")), key="ai_sale_vendor")
+        with p3:
+            quantity = st.number_input("Quantity", min_value=1, step=1, value=int(fields.get("quantity") or 1), key="ai_sale_quantity")
+
+        product_description = st.text_area("Description", value=str(fields.get("product_description", "")), height=65, key="ai_sale_description")
+
+        pr1, pr2, pr3, pr4 = st.columns(4)
+        with pr1:
+            buying_price = st.number_input("Buying Price (₹) *", min_value=0.0, step=1.0, value=float(fields.get("buying_price") or 0), key="ai_sale_buying_price")
+        with pr2:
+            selling_price = st.number_input("Selling Price (₹) *", min_value=0.0, step=1.0, value=float(fields.get("selling_price") or 0), key="ai_sale_selling_price")
+        with pr3:
+            amount_paid = st.number_input("Amount Paid (₹)", min_value=0.0, step=1.0, value=float(fields.get("amount_paid") or 0), key="ai_sale_amount_paid")
+        with pr4:
+            pm_index = PAYMENT_METHODS.index(fields.get("payment_method")) if fields.get("payment_method") in PAYMENT_METHODS else PAYMENT_METHODS.index("UPI")
+            payment_method = st.selectbox("Payment Method", PAYMENT_METHODS, index=pm_index, key="ai_sale_payment_method")
+
+        pending_amount = max(round(float(selling_price) - float(amount_paid), 2), 0.0)
+        profit_amount = round((float(selling_price) - float(buying_price)) * int(quantity), 2)
+        am1, am2, am3 = st.columns(3)
+        am1.metric("Pending", f"₹{pending_amount:,.2f}")
+        am2.metric("Profit", f"₹{profit_amount:,.2f}")
+        am3.metric("Total Value", f"₹{float(selling_price) * int(quantity):,.2f}")
+
+        notes = st.text_area("Notes", value=str(fields.get("notes", "")), height=60, key="ai_sale_notes")
+        save_ai_sale = st.form_submit_button("Save AI Sale", type="primary", width="stretch")
+
+        if save_ai_sale:
+            errs = []
+            if not customer_name.strip():
+                errs.append("Customer name is required.")
+            if buying_price <= 0:
+                errs.append("Buying price must be > 0.")
+            if selling_price <= 0:
+                errs.append("Selling price must be > 0.")
+            if amount_paid > selling_price:
+                errs.append("Amount paid cannot exceed selling price.")
+            if selling_price and buying_price and selling_price < buying_price:
+                st.warning("Selling price is below buying price.")
+            if errs:
+                for err in errs:
+                    st.error(err)
+            else:
+                sale_fields = {
+                    "customer_name": customer_name,
+                    "customer_phone": customer_phone,
+                    "sale_date": str(sale_date),
+                    "vendor": vendor,
+                    "product_category": product_category,
+                    "product_description": product_description,
+                    "quantity": int(quantity),
+                    "buying_price": float(buying_price),
+                    "selling_price": float(selling_price),
+                    "amount_paid": float(amount_paid),
+                    "pending_amount": pending_amount,
+                    "payment_received": 1 if pending_amount == 0 else 0,
+                    "delay_status": 0,
+                    "payment_method": payment_method,
+                    "notes": notes,
+                }
+                sale_id = save_sale_record(sale_fields, source="ai_add_sale")
+                st.session_state.pop("ai_sale_draft", None)
+                st.success(f"AI sale saved as Sale #{sale_id}.")
+                st.rerun()
+
 def render_ai_update_assistant(row: pd.Series, sale_id: int):
     with st.expander("AI Update Assistant", expanded=False):
         if not llm_is_configured():
@@ -2659,6 +2906,10 @@ def page_add_sale(public=False):
     else:
         page_header("New Sale", "Record a Transaction")
 
+    if not public:
+        render_ai_sale_entry_assistant()
+        rule()
+
     ctype = st.radio("", ["New Customer", "Existing Customer"], horizontal=True)
     rule_sm()
 
@@ -2808,47 +3059,6 @@ def page_add_sale(public=False):
                 st.success(f"✓ Sale recorded for {cname.strip()}.")
                 st.balloons()
                 st.rerun()
-
-    if not public:
-        recent_sales = fetch_all()
-        current_sale_context = "\n".join([
-            "Current sale form values:",
-            f"Customer type: {ctype}",
-            f"Customer name: {cname}",
-            f"Phone: {cphone}",
-            f"Sale date: {sdate}",
-            f"Category: {cat}",
-            f"Vendor: {vend}",
-            f"Quantity: {qty}",
-            f"Description: {desc}",
-            f"Buying price: {buy}",
-            f"Selling price: {sell}",
-            f"Amount paid: {paid_amt}",
-            f"Payment method: {pm}",
-            f"Pending amount: {pending_amt}",
-            f"Profit: {profit_amt}",
-            f"Margin percent: {margin_pct}",
-            f"Notes: {notes}",
-            "",
-            "Recent sales for pricing/category reference:",
-            df_for_ai(
-                recent_sales.sort_values("sale_date", ascending=False) if not recent_sales.empty else recent_sales,
-                ["sale_date","customer_name","vendor","product_category","product_description","buying_price","selling_price","profit","payment_method"],
-                40,
-            ),
-        ])
-        render_ai_action_panel(
-            "AI Add Sale Assistant",
-            current_sale_context,
-            "add_sale_ai",
-            {
-                "Check sale entry": "Check the current sale entry for missing fields, pricing mistakes, low margin, pending risk, and cleanup suggestions.",
-                "Suggest selling price": "Using recent sales and the current buying price/category/vendor, suggest a practical selling price and explain the margin.",
-                "Improve description": "Rewrite the product description and notes in a clean boutique style without adding facts that are not present.",
-                "Find similar sales": "Find similar recent sales by vendor, category, description, or price. Summarize what price was used before.",
-                "Payment follow-up": "If there is pending amount, draft a short polite WhatsApp payment follow-up message for the customer.",
-            },
-        )
 
 # =====================================================
 # AUTH HELPERS
