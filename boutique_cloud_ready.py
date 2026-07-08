@@ -989,14 +989,46 @@ def safe_secret(key: str, default: str = ""):
     except Exception:
         return default
 
+def get_gemini_key() -> str:
+    return (
+        safe_secret("GEMINI_API_KEY", "")
+        or safe_secret("GOOGLE_API_KEY", "")
+        or os.getenv("GEMINI_API_KEY", "")
+        or os.getenv("GOOGLE_API_KEY", "")
+    )
+
+def get_gemini_model() -> str:
+    return safe_secret("GEMINI_MODEL", "") or os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+
 def get_openai_key() -> str:
     return safe_secret("OPENAI_API_KEY", "") or os.getenv("OPENAI_API_KEY", "")
 
 def get_openai_model() -> str:
     return safe_secret("OPENAI_MODEL", "") or os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 
+def get_ai_provider() -> str:
+    configured = (safe_secret("AI_PROVIDER", "") or os.getenv("AI_PROVIDER", "")).strip().lower()
+    if configured:
+        return configured
+    if get_gemini_key():
+        return "gemini"
+    if get_openai_key():
+        return "openai"
+    return "gemini"
+
 def llm_is_configured() -> bool:
-    return bool(get_openai_key())
+    provider = get_ai_provider()
+    if provider in {"gemini", "google"}:
+        return bool(get_gemini_key())
+    if provider == "openai":
+        return bool(get_openai_key())
+    return False
+
+def ai_setup_message() -> str:
+    return (
+        "AI is not configured. Set GEMINI_API_KEY in credentials/.env or .streamlit/secrets.toml. "
+        "Optional: set AI_PROVIDER=gemini and GEMINI_MODEL=gemini-2.5-flash."
+    )
 
 def trim_for_ai(text: str, limit: int = 12000) -> str:
     text = str(text or "")
@@ -1016,15 +1048,6 @@ def df_for_ai(df: pd.DataFrame, columns: list[str] | None = None, limit: int = 4
     return view.head(limit).to_csv(index=False)
 
 def ask_llm(task: str, context: str, temperature: float = 0.2) -> str:
-    api_key = get_openai_key()
-    if not api_key:
-        raise RuntimeError("OPENAI_API_KEY is not configured.")
-    try:
-        from openai import OpenAI
-    except ImportError as exc:
-        raise RuntimeError("Install the openai package to use AI features.") from exc
-
-    client = OpenAI(api_key=api_key)
     prompt = f"""
 You are an assistant for {BRAND_NAME}, a boutique sales and passbook tracking app.
 Use only the provided app context. If the context is insufficient, say what is missing.
@@ -1036,17 +1059,49 @@ Task:
 Context:
 {trim_for_ai(context)}
 """.strip()
-    response = client.responses.create(
-        model=get_openai_model(),
-        input=prompt,
-        temperature=temperature,
-    )
-    return getattr(response, "output_text", "") or str(response)
+
+    provider = get_ai_provider()
+    if provider in {"gemini", "google"}:
+        api_key = get_gemini_key()
+        if not api_key:
+            raise RuntimeError("GEMINI_API_KEY is not configured.")
+        try:
+            from google import genai
+            from google.genai import types
+        except ImportError as exc:
+            raise RuntimeError("Install the google-genai package to use Gemini AI features.") from exc
+
+        client = genai.Client(api_key=api_key)
+        response = client.models.generate_content(
+            model=get_gemini_model(),
+            contents=prompt,
+            config=types.GenerateContentConfig(temperature=temperature),
+        )
+        return getattr(response, "text", "") or str(response)
+
+    if provider == "openai":
+        api_key = get_openai_key()
+        if not api_key:
+            raise RuntimeError("OPENAI_API_KEY is not configured.")
+        try:
+            from openai import OpenAI
+        except ImportError as exc:
+            raise RuntimeError("Install the openai package to use OpenAI features.") from exc
+
+        client = OpenAI(api_key=api_key)
+        response = client.responses.create(
+            model=get_openai_model(),
+            input=prompt,
+            temperature=temperature,
+        )
+        return getattr(response, "output_text", "") or str(response)
+
+    raise RuntimeError(f"Unsupported AI_PROVIDER: {provider}. Use gemini or openai.")
 
 def render_ai_panel(title: str, context: str, key: str, default_task: str, expanded: bool = False):
     with st.expander(title, expanded=expanded):
         if not llm_is_configured():
-            st.info("AI is not configured. Set OPENAI_API_KEY in credentials/.env or .streamlit/secrets.toml. Optional: set OPENAI_MODEL.")
+            st.info(ai_setup_message())
             return
         task = st.text_area("Ask AI", value=default_task, height=90, key=f"{key}_task")
         if st.button("Run AI", key=f"{key}_run", use_container_width=True):
@@ -2492,6 +2547,15 @@ def page_add_sale(public=False):
                 st.balloons()
                 st.rerun()
 
+    if not public:
+        recent_sales = fetch_all()
+        render_ai_panel(
+            "AI Sale Helper",
+            "Recent sales for pricing/category reference:\n" + df_for_ai(recent_sales.sort_values("sale_date", ascending=False) if not recent_sales.empty else recent_sales, ["sale_date","customer_name","vendor","product_category","product_description","buying_price","selling_price","profit","payment_method"], 40),
+            "add_sale_ai",
+            "Use recent sales to suggest pricing/category/vendor guidance for a new sale. Keep it practical.",
+        )
+
 # =====================================================
 # AUTH HELPERS
 # =====================================================
@@ -3916,6 +3980,13 @@ def page_work_notes():
             st.success(f"Deleted note #{delete_id}.")
             st.rerun()
 
+    render_ai_panel(
+        "AI Work Notes Summary",
+        "Work notes:\n" + show.to_csv(index=False),
+        "work_notes_ai",
+        "Summarize what work was done recently and suggest the next bookkeeping actions.",
+    )
+
 def build_ai_business_context() -> str:
     df = fetch_all()
     m = metrics(df)
@@ -3946,7 +4017,7 @@ def build_ai_business_context() -> str:
 def page_ai_assistant():
     page_header("AI Assistant", "Ask About Boutique Data")
     if not llm_is_configured():
-        st.info("Set OPENAI_API_KEY in credentials/.env or .streamlit/secrets.toml to enable AI. Optional: set OPENAI_MODEL.")
+        st.info(ai_setup_message())
         return
 
     context = build_ai_business_context()
