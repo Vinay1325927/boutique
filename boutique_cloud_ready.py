@@ -1473,6 +1473,181 @@ def get_bill_history(search: str = "", limit: int = 100) -> list[dict]:
         ]}
     return list(bill_history_collection().find(query, {"_id": 0}).sort("generated_at", -1).limit(limit))
 
+def extract_passbook_pdf_text(file_bytes: bytes) -> str:
+    try:
+        import pdfplumber
+        with pdfplumber.open(BytesIO(file_bytes)) as pdf:
+            return "\n".join(page.extract_text(x_tolerance=1, y_tolerance=3) or "" for page in pdf.pages)
+    except ImportError:
+        try:
+            from pypdf import PdfReader
+        except ImportError as exc:
+            raise RuntimeError("Install pdfplumber or pypdf to read passbook PDFs.") from exc
+        reader = PdfReader(BytesIO(file_bytes))
+        return "\n".join(page.extract_text() or "" for page in reader.pages)
+
+def passbook_field(text: str, pattern: str) -> str:
+    match = re.search(pattern, text, flags=re.IGNORECASE)
+    return clean_text_cell(match.group(1)) if match else ""
+
+def passbook_amount(value: str) -> float:
+    try:
+        return float(str(value or "0").replace(",", ""))
+    except ValueError:
+        return 0.0
+
+def parse_passbook_transactions(text: str) -> list[dict]:
+    amount = r"\d{1,3}(?:,\d{3})*(?:\.\d{2})|\d+(?:\.\d{2})"
+    row_re = re.compile(rf"^(\d{{2}}/\d{{2}}/\d{{4}})\s+(TO|BY)\s+(.+?)\s+({amount})\s+({amount})$", re.IGNORECASE)
+    rows = []
+    for raw_line in text.splitlines():
+        line = re.sub(r"\s+", " ", str(raw_line or "")).strip()
+        match = row_re.match(line)
+        if not match:
+            continue
+        txn_date, direction, description, txn_amount, balance = match.groups()
+        direction = direction.upper()
+        rows.append({
+            "Date": txn_date,
+            "Description": f"{direction} {description}".strip(),
+            "Debit": passbook_amount(txn_amount) if direction == "TO" else 0.0,
+            "Credit": passbook_amount(txn_amount) if direction == "BY" else 0.0,
+            "Balance": passbook_amount(balance),
+        })
+    return rows
+
+@st.cache_data(show_spinner=False)
+def parse_passbook_pdf(file_bytes: bytes, filename: str) -> dict:
+    text = extract_passbook_pdf_text(file_bytes)
+    lines = [re.sub(r"\s+", " ", line).strip() for line in text.splitlines() if str(line).strip()]
+
+    customer_name = passbook_field(text, r"CUSTOMER\s+DETAILS\s*:\s*(.+)")
+    customer_name = re.sub(r"\s*\.$", "", customer_name).strip()
+    address_lines = []
+    for idx, line in enumerate(lines):
+        if re.search(r"CUSTOMER\s+DETAILS\s*:", line, flags=re.IGNORECASE):
+            for next_line in lines[idx + 1:]:
+                if re.search(r"^(Statement Date|STATEMENT OF ACCOUNT|DATE DESCRIPTION)", next_line, flags=re.IGNORECASE):
+                    break
+                address_lines.append(next_line)
+            break
+
+    branch_address = ""
+    for idx, line in enumerate(lines):
+        if re.search(r"^BRANCH\s*:", line, flags=re.IGNORECASE) and idx + 1 < len(lines):
+            candidate = lines[idx + 1]
+            if not re.search(r"^(ACCOUNT|IFSC|CUSTOMER|STATEMENT)", candidate, flags=re.IGNORECASE):
+                branch_address = candidate
+            break
+
+    transactions = parse_passbook_transactions(text)
+    total_debit = sum(row["Debit"] for row in transactions)
+    total_credit = sum(row["Credit"] for row in transactions)
+    latest_balance = transactions[-1]["Balance"] if transactions else 0.0
+
+    return {
+        "filename": filename,
+        "bank": lines[0] if lines else "",
+        "branch": passbook_field(text, r"BRANCH\s*:\s*(.+)"),
+        "branch_address": branch_address,
+        "account_no": passbook_field(text, r"ACCOUNT\s+NO\s*:\s*([^\n]+)"),
+        "account_no_15": passbook_field(text, r"ACCOUNT\s+NO\(15\s+DIGIT\)\s*:\s*([^\n]+)"),
+        "ifsc": passbook_field(text, r"IFSC\s*:\s*([^\n]+)"),
+        "account_type": passbook_field(text, r"ACCOUNT\s+TYPE\s*:\s*([^\n]*)"),
+        "customer_name": customer_name or filename,
+        "address": ", ".join(address_lines),
+        "statement_date": passbook_field(text, r"Statement\s+Date\s*:\s*([^\n]+)"),
+        "statement_period": passbook_field(text, r"STATEMENT\s+OF\s+ACCOUNT\s+from\s+(.+)"),
+        "transactions": transactions,
+        "total_debit": total_debit,
+        "total_credit": total_credit,
+        "latest_balance": latest_balance,
+        "raw_text": text,
+    }
+
+def render_passbook_sidebar():
+    st.markdown("#### Passbook Reader")
+    uploads = st.file_uploader(
+        "Upload passbook PDF",
+        type=["pdf"],
+        accept_multiple_files=True,
+        key="passbook_pdf_uploads",
+    )
+    if not uploads:
+        st.caption("Upload one or more passbook PDFs to view account details here.")
+        return
+
+    passbooks = []
+    for uploaded in uploads:
+        try:
+            passbooks.append(parse_passbook_pdf(uploaded.getvalue(), uploaded.name))
+        except RuntimeError as exc:
+            st.error(str(exc))
+        except Exception as exc:
+            st.error(f"Could not read {uploaded.name}: {exc}")
+
+    if not passbooks:
+        return
+
+    selected_idx = st.selectbox(
+        "Name Filter",
+        list(range(len(passbooks))),
+        format_func=lambda idx: f"{passbooks[idx].get('customer_name') or 'Unknown'} - {passbooks[idx].get('statement_date') or passbooks[idx].get('account_no_15') or passbooks[idx].get('filename')}",
+        key="passbook_name_filter",
+    )
+    pb = passbooks[selected_idx]
+    txns = pb.get("transactions", [])
+
+    st.markdown(f"**{pb.get('customer_name', 'Unknown')}**")
+    if pb.get("bank"):
+        st.caption(pb["bank"])
+    p1, p2 = st.columns(2)
+    p1.metric("Credits", f"₹{pb.get('total_credit', 0):,.0f}")
+    p2.metric("Debits", f"₹{pb.get('total_debit', 0):,.0f}")
+    st.metric("Balance", f"₹{pb.get('latest_balance', 0):,.2f}")
+
+    with st.expander("Account Details", expanded=True):
+        detail_rows = [
+            ("File", pb.get("filename", "")),
+            ("Branch", pb.get("branch", "")),
+            ("Branch Address", pb.get("branch_address", "")),
+            ("Account No", pb.get("account_no", "")),
+            ("15 Digit A/C", pb.get("account_no_15", "")),
+            ("IFSC", pb.get("ifsc", "")),
+            ("Account Type", pb.get("account_type", "") or "-"),
+            ("Statement Date", pb.get("statement_date", "")),
+            ("Period", pb.get("statement_period", "")),
+            ("Address", pb.get("address", "")),
+        ]
+        for label, value in detail_rows:
+            if value:
+                st.caption(label)
+                st.write(value)
+
+    with st.expander(f"Transactions ({len(txns)})", expanded=False):
+        if txns:
+            txn_df = pd.DataFrame(txns)
+            st.dataframe(txn_df, use_container_width=True, hide_index=True, height=260)
+            st.download_button(
+                "Download CSV",
+                data=txn_df.to_csv(index=False),
+                file_name=f"passbook_{re.sub(r'[^0-9A-Za-z]+', '_', pb.get('customer_name', 'account')).strip('_').lower()}.csv",
+                mime="text/csv",
+                key=f"passbook_csv_{selected_idx}",
+                use_container_width=True,
+            )
+        else:
+            st.info("No transaction rows detected.")
+
+    with st.expander("Extracted Text", expanded=False):
+        st.text_area(
+            "Raw PDF Text",
+            value=pb.get("raw_text", ""),
+            height=180,
+            disabled=True,
+            key=f"passbook_raw_text_{selected_idx}",
+        )
+
 def make_upi_qr_png(amount: float = 0.0) -> BytesIO:
     try:
         import qrcode
@@ -2036,6 +2211,10 @@ def sidebar():
             <div class='sb-mark'>Boutique Manager</div>
         </div>
         """, unsafe_allow_html=True)
+        st.markdown("<div class='sb-sep'></div>", unsafe_allow_html=True)
+
+        render_passbook_sidebar()
+
         st.markdown("<div class='sb-sep'></div>", unsafe_allow_html=True)
 
         df = fetch_all()
