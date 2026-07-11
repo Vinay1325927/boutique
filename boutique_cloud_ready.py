@@ -9,6 +9,8 @@ import os
 import time
 import hmac
 import hashlib
+import secrets
+import uuid
 import re
 import json
 from html import escape as html_escape
@@ -3067,6 +3069,389 @@ def page_add_sale(public=False):
 _MAX_ATTEMPTS   = 5
 _LOCKOUT_SECS   = 300   # 5-minute lockout after max attempts
 _BACKOFF_BASE   = 1.5   # seconds — doubles each attempt after 1st failure
+_FACE_MATCH_TOLERANCE = 0.46
+_TEMP_QR_TYPE = "boutique_temp_login"
+_FACE_VECTOR_VERSION = "face_recognition_128d_v1"
+
+def auth_faces_collection():
+    return get_db()["auth_faces"]
+
+def auth_qr_collection():
+    return get_db()["auth_temp_qr_logins"]
+
+def auth_devices_collection():
+    return get_db()["auth_login_devices"]
+
+@st.cache_resource
+def ensure_auth_indexes():
+    try:
+        auth_faces_collection().create_index([("active", 1), ("name", 1)])
+        auth_qr_collection().create_index([("active", 1), ("expires_at", 1)])
+        auth_devices_collection().create_index([("active", 1), ("last_login_at", -1)])
+    except Exception:
+        pass
+
+def _new_auth_id(prefix: str) -> str:
+    return f"{prefix}_{uuid.uuid4().hex}"
+
+def _get_face_match_tolerance() -> float:
+    raw = safe_secret("FACE_MATCH_TOLERANCE", "") or os.getenv("FACE_MATCH_TOLERANCE", "")
+    try:
+        if raw:
+            return min(max(float(raw), 0.35), 0.60)
+    except Exception:
+        pass
+    return _FACE_MATCH_TOLERANCE
+
+@st.cache_resource
+def _load_cv_libs():
+    try:
+        import cv2
+        import numpy as np
+        return cv2, np, ""
+    except Exception as exc:
+        return None, None, str(exc)
+
+@st.cache_resource
+def _load_vision_libs():
+    try:
+        cv2, np, error = _load_cv_libs()
+        if error:
+            return None, None, None, error
+        import face_recognition
+        return cv2, np, face_recognition, ""
+    except Exception as exc:
+        return None, None, None, str(exc)
+
+def _cv_dependency_message(error: str) -> str:
+    return (
+        "Camera and QR processing need OpenCV and numpy installed. "
+        f"Dependency error: {error}"
+    )
+
+def _vision_dependency_message(error: str) -> str:
+    return (
+        "Camera login needs OpenCV, numpy, and face_recognition installed. "
+        f"Dependency error: {error}"
+    )
+
+def _uploaded_file_to_bgr(uploaded_file):
+    cv2, np, error = _load_cv_libs()
+    if error:
+        return None, _cv_dependency_message(error)
+    if uploaded_file is None:
+        return None, "Capture an image first."
+    raw = uploaded_file.getvalue()
+    if not raw:
+        return None, "The captured image is empty."
+    image_array = np.frombuffer(raw, dtype=np.uint8)
+    image_bgr = cv2.imdecode(image_array, cv2.IMREAD_COLOR)
+    if image_bgr is None:
+        return None, "Could not read the captured image."
+    return image_bgr, ""
+
+def extract_face_encoding(uploaded_file):
+    cv2, _, face_recognition, error = _load_vision_libs()
+    if error:
+        return None, _vision_dependency_message(error)
+    image_bgr, error = _uploaded_file_to_bgr(uploaded_file)
+    if error:
+        return None, error
+    image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
+    locations = face_recognition.face_locations(image_rgb, model="hog")
+    if not locations:
+        return None, "No face was found. Try brighter light and keep your face centered."
+    if len(locations) > 1:
+        return None, "Multiple faces were found. Capture only one person."
+    encodings = face_recognition.face_encodings(image_rgb, known_face_locations=locations)
+    if not encodings:
+        return None, "Could not convert this face into a Face ID vector."
+    return [float(v) for v in encodings[0]], ""
+
+def _find_matching_face(encoding: list[float]):
+    _, np, error = _load_cv_libs()
+    if error:
+        return None, None, _cv_dependency_message(error)
+
+    docs = list(auth_faces_collection().find(
+        {"active": {"$ne": False}},
+        {"encoding": 1, "name": 1, "role": 1, "created_at": 1, "last_login_at": 1},
+    ))
+    if not docs:
+        return None, None, "No Face IDs are enrolled yet."
+
+    known = []
+    candidates = []
+    for doc in docs:
+        stored = doc.get("encoding")
+        if isinstance(stored, list) and len(stored) == len(encoding):
+            known.append(stored)
+            candidates.append(doc)
+
+    if not candidates:
+        return None, None, "No valid Face ID vectors are saved."
+
+    distances = np.linalg.norm(
+        np.array(known, dtype="float64") - np.array(encoding, dtype="float64"),
+        axis=1,
+    )
+    best_idx = int(np.argmin(distances))
+    best_distance = float(distances[best_idx])
+    if best_distance <= _get_face_match_tolerance():
+        return candidates[best_idx], best_distance, ""
+    return None, best_distance, "Face ID not recognized."
+
+def save_face_profile(name: str, role: str, encoding: list[float], created_via: str, qr_token_id: str | None = None) -> str:
+    face_id = _new_auth_id("face")
+    auth_faces_collection().insert_one({
+        "_id": face_id,
+        "name": name.strip()[:120],
+        "role": role if role in {"admin", "member"} else "member",
+        "encoding": encoding,
+        "vector_version": _FACE_VECTOR_VERSION,
+        "active": True,
+        "created_via": created_via,
+        "qr_token_id": qr_token_id,
+        "created_by": st.session_state.get("username", "System"),
+        "created_at": datetime.now(),
+        "last_login_at": None,
+        "login_count": 0,
+    })
+    return face_id
+
+def _hash_temp_qr_secret(secret_value: str) -> str:
+    return hashlib.sha256(f"{_TEMP_QR_TYPE}:{secret_value}".encode()).hexdigest()
+
+def _hash_pin(pin: str) -> str:
+    return bcrypt.hashpw(pin.encode(), bcrypt.gensalt()).decode()
+
+def _check_pin(pin: str, pin_hash: str) -> bool:
+    try:
+        return bcrypt.checkpw(pin.encode(), pin_hash.encode())
+    except Exception:
+        return False
+
+def make_temp_login_qr_png(payload: str) -> bytes:
+    try:
+        import qrcode
+    except ImportError as exc:
+        raise RuntimeError("Install qrcode[pil] to generate temporary login QR codes.") from exc
+    qr = qrcode.QRCode(box_size=8, border=2)
+    qr.add_data(payload)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="black", back_color="white")
+    out = BytesIO()
+    img.save(out, format="PNG")
+    return out.getvalue()
+
+def create_temp_qr_invite(member_name: str, pin: str, expires_hours: int) -> dict:
+    token_id = _new_auth_id("qr")
+    token_secret = secrets.token_urlsafe(32)
+    expires_at = datetime.now() + timedelta(hours=int(expires_hours))
+    payload = {
+        "type": _TEMP_QR_TYPE,
+        "token_id": token_id,
+        "secret": token_secret,
+    }
+    auth_qr_collection().insert_one({
+        "_id": token_id,
+        "member_name": member_name.strip()[:120],
+        "secret_hash": _hash_temp_qr_secret(token_secret),
+        "pin_hash": _hash_pin(pin),
+        "active": True,
+        "expires_at": expires_at,
+        "created_at": datetime.now(),
+        "created_by": st.session_state.get("username", "Admin"),
+        "pin_failures": 0,
+        "used_at": None,
+        "face_id": None,
+    })
+    payload_json = json.dumps(payload, separators=(",", ":"))
+    return {
+        "token_id": token_id,
+        "member_name": member_name.strip()[:120],
+        "expires_at": expires_at,
+        "payload_json": payload_json,
+        "qr_png": make_temp_login_qr_png(payload_json),
+    }
+
+def _decode_qr_payload(uploaded_file):
+    cv2, _, error = _load_cv_libs()
+    if error:
+        return None, _cv_dependency_message(error)
+    image_bgr, error = _uploaded_file_to_bgr(uploaded_file)
+    if error:
+        return None, error
+    detector = cv2.QRCodeDetector()
+    decoded, _, _ = detector.detectAndDecode(image_bgr)
+    if not decoded:
+        try:
+            ok, decoded_info, _, _ = detector.detectAndDecodeMulti(image_bgr)
+            if ok:
+                decoded = next((item for item in decoded_info if item), "")
+        except Exception:
+            decoded = ""
+    if not decoded:
+        return None, "No QR code was detected. Hold the QR clearly in the camera frame."
+    try:
+        payload = json.loads(decoded)
+    except Exception:
+        return None, "This QR code is not a boutique login QR."
+    if payload.get("type") != _TEMP_QR_TYPE:
+        return None, "This QR code is not a boutique login QR."
+    if not payload.get("token_id") or not payload.get("secret"):
+        return None, "This QR code is missing login data."
+    return payload, ""
+
+def _lookup_temp_qr(payload: dict):
+    doc = auth_qr_collection().find_one({"_id": payload.get("token_id")})
+    if not doc:
+        return None, "This QR login has not been found."
+    expected = _hash_temp_qr_secret(str(payload.get("secret", "")))
+    if not hmac.compare_digest(str(doc.get("secret_hash", "")), expected):
+        return None, "This QR login is not valid."
+    if not doc.get("active", True) or doc.get("used_at"):
+        return None, "This QR login has already been used or revoked."
+    expires_at = doc.get("expires_at")
+    if isinstance(expires_at, datetime) and expires_at < datetime.now():
+        return None, "This QR login has expired."
+    return doc, ""
+
+def _verify_temp_qr_pin(payload: dict, pin: str):
+    doc, error = _lookup_temp_qr(payload)
+    if error:
+        return None, error
+    if _check_pin(pin, str(doc.get("pin_hash", ""))):
+        return doc, ""
+
+    failures = int(doc.get("pin_failures", 0)) + 1
+    update = {"$set": {"pin_failures": failures}}
+    if failures >= _MAX_ATTEMPTS:
+        update["$set"]["active"] = False
+        update["$set"]["revoked_reason"] = "too_many_pin_failures"
+    auth_qr_collection().update_one({"_id": doc["_id"]}, update)
+    if failures >= _MAX_ATTEMPTS:
+        return None, "Too many wrong PIN attempts. This QR login is now revoked."
+    return None, f"Invalid PIN. {max(_MAX_ATTEMPTS - failures, 0)} attempt(s) remaining."
+
+def _mark_temp_qr_used(token_id: str, face_id: str):
+    auth_qr_collection().update_one(
+        {"_id": token_id},
+        {"$set": {
+            "active": False,
+            "used_at": datetime.now(),
+            "face_id": face_id,
+        }},
+    )
+
+def _request_device_details() -> dict:
+    headers = {}
+    try:
+        headers = dict(st.context.headers)
+    except Exception:
+        headers = {}
+    user_agent = headers.get("user-agent", "") or headers.get("User-Agent", "")
+    ip_addr = headers.get("x-forwarded-for", "") or headers.get("X-Forwarded-For", "")
+    lower = user_agent.lower()
+    if "iphone" in lower:
+        device = "iPhone"
+    elif "ipad" in lower:
+        device = "iPad"
+    elif "macintosh" in lower or "mac os" in lower:
+        device = "Mac"
+    elif "windows" in lower:
+        device = "Windows"
+    elif "android" in lower:
+        device = "Android"
+    else:
+        device = "Browser"
+    if "chrome" in lower:
+        browser = "Chrome"
+    elif "safari" in lower:
+        browser = "Safari"
+    elif "firefox" in lower:
+        browser = "Firefox"
+    elif "edge" in lower:
+        browser = "Edge"
+    else:
+        browser = "Web"
+    signature = hashlib.sha256(f"{user_agent}|{ip_addr}".encode()).hexdigest()[:18]
+    return {
+        "label": f"{browser} on {device}",
+        "signature": signature,
+        "user_agent": user_agent[:500],
+        "ip": ip_addr[:120],
+    }
+
+def establish_login(username: str, role: str = "member", method: str = "face", face_id: str | None = None, qr_token_id: str | None = None):
+    device_id = st.session_state.get("auth_device_id")
+    if device_id:
+        existing_device = auth_devices_collection().find_one({"_id": device_id}, {"active": 1})
+        if existing_device and existing_device.get("active") is False:
+            device_id = None
+    if not device_id:
+        device_id = _new_auth_id("device")
+        st.session_state.auth_device_id = device_id
+
+    details = _request_device_details()
+    now = datetime.now()
+    auth_devices_collection().update_one(
+        {"_id": device_id},
+        {
+            "$set": {
+                "user_name": username.strip()[:120] or "Member",
+                "role": role,
+                "method": method,
+                "face_id": face_id,
+                "qr_token_id": qr_token_id,
+                "label": details["label"],
+                "signature": details["signature"],
+                "user_agent": details["user_agent"],
+                "ip": details["ip"],
+                "last_login_at": now,
+                "active": True,
+            },
+            "$setOnInsert": {"created_at": now},
+        },
+        upsert=True,
+    )
+    if face_id:
+        auth_faces_collection().update_one(
+            {"_id": face_id},
+            {"$set": {"last_login_at": now}, "$inc": {"login_count": 1}},
+        )
+    st.session_state.logged_in = True
+    st.session_state.username = username.strip()[:120] or "Member"
+    st.session_state.user_role = role
+    st.session_state.auth_method = method
+    st.session_state.face_id = face_id
+
+def _current_auth_device_revoked() -> bool:
+    device_id = st.session_state.get("auth_device_id")
+    if not device_id:
+        return False
+    doc = auth_devices_collection().find_one({"_id": device_id}, {"active": 1})
+    return bool(doc and doc.get("active") is False)
+
+def _is_admin() -> bool:
+    return st.session_state.get("user_role", "admin") == "admin"
+
+def _clear_auth_state():
+    for key in (
+        "logged_in",
+        "username",
+        "user_role",
+        "auth_method",
+        "face_id",
+        "pending_qr_payload",
+        "pending_qr_member",
+        "pending_qr_token_id",
+        "pending_qr_pin_ok",
+        "generated_temp_qr",
+        "auth_device_id",
+    ):
+        st.session_state.pop(key, None)
+    st.session_state.logged_in = False
 
 def _get_stored_hash() -> bytes | None:
     """
@@ -3146,19 +3531,133 @@ def _verify_credentials(username: str, password: str) -> bool:
 # ADMIN LOGIN
 # =====================================================
 
+def _render_face_login_panel():
+    active_faces = auth_faces_collection().count_documents({"active": {"$ne": False}})
+    if active_faces == 0:
+        st.info("No Face IDs are enrolled yet. Use the password fallback once, then add Face ID in Security & Devices.")
+
+    capture = st.camera_input("Face ID camera", key="face_login_camera")
+    if st.button("Verify Face ID", key="verify_face_login", type="primary", width="stretch", disabled=capture is None):
+        encoding, error = extract_face_encoding(capture)
+        if error:
+            st.error(error)
+            return
+        match, distance, error = _find_matching_face(encoding)
+        if match:
+            st.session_state.login_attempts = 0
+            st.session_state.login_lock_until = 0
+            establish_login(
+                match.get("name", "Member"),
+                role=match.get("role", "member"),
+                method="face",
+                face_id=match["_id"],
+            )
+            st.success(f"Signed in as {match.get('name', 'Member')}.")
+            st.rerun()
+        _record_failure()
+        if distance is None:
+            st.error(error)
+        else:
+            st.error(f"{error} Match distance: {distance:.3f}.")
+
+def _clear_pending_qr_login():
+    for key in ("pending_qr_payload", "pending_qr_member", "pending_qr_token_id", "pending_qr_pin_ok"):
+        st.session_state.pop(key, None)
+
+def _render_qr_member_login_panel():
+    if st.session_state.get("pending_qr_pin_ok"):
+        member_name = st.session_state.get("pending_qr_member", "Member")
+        token_id = st.session_state.get("pending_qr_token_id")
+        st.success(f"PIN verified for {member_name}.")
+        face_capture = st.camera_input("Set member Face ID", key="qr_face_enroll_camera")
+        if st.button("Save Face ID and sign in", key="save_qr_face_login", type="primary", width="stretch", disabled=face_capture is None):
+            encoding, error = extract_face_encoding(face_capture)
+            if error:
+                st.error(error)
+                return
+            face_id = save_face_profile(
+                member_name,
+                role="member",
+                encoding=encoding,
+                created_via="temporary_qr",
+                qr_token_id=token_id,
+            )
+            _mark_temp_qr_used(token_id, face_id)
+            _clear_pending_qr_login()
+            establish_login(member_name, role="member", method="qr_face_enroll", face_id=face_id, qr_token_id=token_id)
+            st.success(f"Face ID saved for {member_name}.")
+            st.rerun()
+        if st.button("Cancel QR login", key="cancel_qr_after_pin"):
+            _clear_pending_qr_login()
+            st.rerun()
+        return
+
+    if st.session_state.get("pending_qr_payload"):
+        member_name = st.session_state.get("pending_qr_member", "Member")
+        st.success(f"QR accepted for {member_name}.")
+        with st.form("qr_pin_form"):
+            pin = st.text_input("PIN", type="password", key="qr_login_pin")
+            submitted = st.form_submit_button("Verify PIN", width="stretch")
+        if submitted:
+            doc, error = _verify_temp_qr_pin(st.session_state.pending_qr_payload, pin)
+            if error:
+                st.error(error)
+            else:
+                st.session_state.pending_qr_member = doc.get("member_name", member_name)
+                st.session_state.pending_qr_token_id = doc["_id"]
+                st.session_state.pending_qr_pin_ok = True
+                st.rerun()
+        if st.button("Scan different QR", key="scan_different_qr"):
+            _clear_pending_qr_login()
+            st.rerun()
+        return
+
+    qr_capture = st.camera_input("Scan temporary login QR", key="qr_login_camera")
+    if qr_capture is not None:
+        payload, error = _decode_qr_payload(qr_capture)
+        if error:
+            st.error(error)
+            return
+        doc, error = _lookup_temp_qr(payload)
+        if error:
+            st.error(error)
+            return
+        st.session_state.pending_qr_payload = payload
+        st.session_state.pending_qr_member = doc.get("member_name", "Member")
+        st.session_state.pending_qr_token_id = doc["_id"]
+        st.rerun()
+
+def _render_password_fallback_panel():
+    if _get_stored_hash() is None or _get_username() is None:
+        st.info("Password fallback is not configured.")
+        return
+
+    attempts_left = _MAX_ATTEMPTS - st.session_state.get("login_attempts", 0)
+    if attempts_left < _MAX_ATTEMPTS:
+        st.warning(f"{attempts_left} attempt(s) remaining before lockout.")
+
+    with st.form("admin_login_form"):
+        u = st.text_input("Username", placeholder="username", key="admin_u")
+        p = st.text_input("Password", type="password", placeholder="••••••••", key="admin_p")
+        submitted = st.form_submit_button("Sign in with password", width="stretch")
+
+    if submitted:
+        if _verify_credentials(u, p):
+            st.session_state.login_attempts = 0
+            st.session_state.login_lock_until = 0
+            establish_login(u, role="admin", method="password")
+            st.rerun()
+        else:
+            _record_failure()
+            locked2, secs_left2 = _check_lockout()
+            if locked2:
+                st.error(f"Account locked for {secs_left2 // 60}m {secs_left2 % 60}s.")
+            else:
+                st.error("Invalid credentials.")
+
 def render_admin_login_strip():
     st.markdown("<div class='admin-strip'>", unsafe_allow_html=True)
-    st.markdown("<div class='admin-strip-label'>◆ Admin Access</div>", unsafe_allow_html=True)
-
-    # Credential config check (fail closed if nothing set)
-    if _get_stored_hash() is None or _get_username() is None:
-        with st.expander("Sign in to Admin Dashboard", expanded=False):
-            st.error(
-                "Admin credentials are not configured. "
-                "Set USERNAME and PASSWORD (or PASSWORD_HASH) in st.secrets or environment variables."
-            )
-        st.markdown("</div>", unsafe_allow_html=True)
-        return
+    st.markdown("<div class='admin-strip-label'>◆ Secure Access</div>", unsafe_allow_html=True)
 
     with st.expander("Sign in to Admin Dashboard", expanded=False):
         locked, secs_left = _check_lockout()
@@ -3167,30 +3666,13 @@ def render_admin_login_strip():
             st.markdown("</div>", unsafe_allow_html=True)
             return
 
-        attempts_left = _MAX_ATTEMPTS - st.session_state.get("login_attempts", 0)
-        if attempts_left < _MAX_ATTEMPTS:
-            st.warning(f"{attempts_left} attempt(s) remaining before lockout.")
-
-        with st.form("admin_login_form"):
-            u = st.text_input("Username", placeholder="username",   key="admin_u")
-            p = st.text_input("Password", type="password",
-                              placeholder="••••••••",                key="admin_p")
-            submitted = st.form_submit_button("Sign In", use_container_width=True)
-
-        if submitted:
-            if _verify_credentials(u, p):
-                st.session_state.logged_in      = True
-                st.session_state.username        = u
-                st.session_state.login_attempts  = 0
-                st.session_state.login_lock_until = 0
-                st.rerun()
-            else:
-                _record_failure()
-                locked2, secs_left2 = _check_lockout()
-                if locked2:
-                    st.error(f"Account locked for {secs_left2 // 60}m {secs_left2 % 60}s.")
-                else:
-                    st.error("Invalid credentials.")
+        face_tab, qr_tab, backup_tab = st.tabs(["Face ID", "QR member", "Password fallback"])
+        with face_tab:
+            _render_face_login_panel()
+        with qr_tab:
+            _render_qr_member_login_panel()
+        with backup_tab:
+            _render_password_fallback_panel()
 
     st.markdown("</div>", unsafe_allow_html=True)
 
@@ -3226,25 +3708,38 @@ def sidebar():
 
         st.markdown("<div class='sb-sep'></div>", unsafe_allow_html=True)
 
-        nav = st.radio("Navigation", [
-            "Dashboard",
-            "Add Sale",
-            "Review Accounts",
-            "Update Transaction",
-            "Customer List",
-            "Analytics",
-            "Reminders & Alerts",
-            "Generate Bill",
-            "Passbook Reader",
-            "Work Notes",
-            "AI Assistant",
-            "Backup & Restore",
-            "Logout",
-        ], label_visibility="collapsed")
+        if _is_admin():
+            nav_options = [
+                "Dashboard",
+                "Add Sale",
+                "Review Accounts",
+                "Update Transaction",
+                "Customer List",
+                "Analytics",
+                "Reminders & Alerts",
+                "Generate Bill",
+                "Passbook Reader",
+                "Work Notes",
+                "AI Assistant",
+                "Security & Devices",
+                "Backup & Restore",
+                "Logout",
+            ]
+        else:
+            nav_options = [
+                "Add Sale",
+                "Review Accounts",
+                "Customer List",
+                "Generate Bill",
+                "Logout",
+            ]
+
+        nav = st.radio("Navigation", nav_options, label_visibility="collapsed")
 
         st.markdown("<div class='sb-sep'></div>", unsafe_allow_html=True)
+        role_label = st.session_state.get("user_role", "admin").title()
         st.markdown(
-            f"<div class='sb-user'>◆ {st.session_state.get('username','Admin').title()}</div>",
+            f"<div class='sb-user'>◆ {st.session_state.get('username','Admin').title()} · {role_label}</div>",
             unsafe_allow_html=True,
         )
     return nav
@@ -3252,6 +3747,168 @@ def sidebar():
 # =====================================================
 # ADMIN PAGES
 # =====================================================
+
+def _format_auth_dt(value) -> str:
+    if isinstance(value, datetime):
+        return value.strftime("%Y-%m-%d %H:%M")
+    if value:
+        return str(value)[:16]
+    return "Never"
+
+def page_security_devices():
+    if not _is_admin():
+        st.error("Security settings are available only to admins.")
+        return
+
+    ensure_auth_indexes()
+    page_header("Security & Devices", "Face ID, QR Invites & Login Sessions")
+    face_tab, qr_tab, device_tab = st.tabs(["Face IDs", "Temporary QR", "Login devices"])
+
+    with face_tab:
+        with st.container(border=True):
+            st.subheader("Add Face ID")
+            name = st.text_input("Name", value=st.session_state.get("username", "Admin"), key="security_face_name")
+            role = st.selectbox("Access role", ["admin", "member"], format_func=lambda item: item.title(), key="security_face_role")
+            capture = st.camera_input("Capture Face ID", key="security_face_capture")
+            if st.button("Save Face ID", key="security_save_face", type="primary", width="stretch", disabled=capture is None):
+                if not name.strip():
+                    st.error("Enter a name before saving Face ID.")
+                else:
+                    encoding, error = extract_face_encoding(capture)
+                    if error:
+                        st.error(error)
+                    else:
+                        face_id = save_face_profile(name, role, encoding, created_via="admin_panel")
+                        st.success(f"Saved Face ID for {name.strip()}.")
+                        st.rerun()
+
+        st.markdown("<div class='rule-sm'></div>", unsafe_allow_html=True)
+        faces = list(auth_faces_collection().find({}, {"encoding": 0}).sort("created_at", -1))
+        if not faces:
+            st.info("No Face IDs saved yet.")
+        for face in faces:
+            face_id = face["_id"]
+            with st.container(border=True):
+                c1, c2, c3, c4 = st.columns([2.2, 1.0, 1.4, 0.9])
+                c1.markdown(f"**{html_escape(str(face.get('name', 'Member')))}**")
+                c1.caption(f"Created {_format_auth_dt(face.get('created_at'))}")
+                c2.write(str(face.get("role", "member")).title())
+                c3.write(f"Last login: {_format_auth_dt(face.get('last_login_at'))}")
+                c3.caption(f"Logins: {int(face.get('login_count', 0))}")
+                if c4.button("Delete", key=f"delete_face_{face_id}", width="stretch"):
+                    auth_faces_collection().delete_one({"_id": face_id})
+                    auth_devices_collection().update_many(
+                        {"face_id": face_id, "active": True},
+                        {"$set": {
+                            "active": False,
+                            "revoked_at": datetime.now(),
+                            "revoked_by": st.session_state.get("username", "Admin"),
+                            "revoked_reason": "face_deleted",
+                        }},
+                    )
+                    st.success("Face ID deleted.")
+                    st.rerun()
+
+    with qr_tab:
+        with st.container(border=True):
+            st.subheader("Generate temporary QR")
+            with st.form("generate_temp_qr_form"):
+                member_name = st.text_input("Member name", key="qr_member_name")
+                pin = st.text_input("PIN to share", type="password", key="qr_member_pin")
+                pin2 = st.text_input("Confirm PIN", type="password", key="qr_member_pin2")
+                expires_hours = st.number_input("Expires in hours", min_value=1, max_value=168, value=24, step=1)
+                submitted = st.form_submit_button("Generate QR", width="stretch")
+            if submitted:
+                if not member_name.strip():
+                    st.error("Enter the member name.")
+                elif len(pin) < 4:
+                    st.error("Use at least 4 characters for the PIN.")
+                elif pin != pin2:
+                    st.error("PIN values do not match.")
+                else:
+                    st.session_state.generated_temp_qr = create_temp_qr_invite(member_name, pin, int(expires_hours))
+                    st.success("Temporary QR generated.")
+
+            generated = st.session_state.get("generated_temp_qr")
+            if generated:
+                st.image(generated["qr_png"], width=260)
+                st.caption(f"For {generated['member_name']} · expires {_format_auth_dt(generated['expires_at'])}")
+                st.download_button(
+                    "Download QR",
+                    data=generated["qr_png"],
+                    file_name=f"{generated['member_name'].replace(' ', '_')}_login_qr.png",
+                    mime="image/png",
+                    width="content",
+                )
+
+        st.markdown("<div class='rule-sm'></div>", unsafe_allow_html=True)
+        invites = list(auth_qr_collection().find(
+            {},
+            {"secret_hash": 0, "pin_hash": 0},
+        ).sort("created_at", -1).limit(50))
+        if not invites:
+            st.info("No QR invites created yet.")
+        for invite in invites:
+            invite_id = invite["_id"]
+            active = bool(invite.get("active", True)) and not invite.get("used_at")
+            if isinstance(invite.get("expires_at"), datetime) and invite["expires_at"] < datetime.now():
+                active = False
+            with st.container(border=True):
+                c1, c2, c3, c4 = st.columns([2.2, 1.1, 1.4, 0.9])
+                c1.markdown(f"**{html_escape(str(invite.get('member_name', 'Member')))}**")
+                c1.caption(f"Created {_format_auth_dt(invite.get('created_at'))}")
+                c2.write("Active" if active else "Closed")
+                c3.write(f"Expires: {_format_auth_dt(invite.get('expires_at'))}")
+                if invite.get("used_at"):
+                    c3.caption(f"Used {_format_auth_dt(invite.get('used_at'))}")
+                elif active and c4.button("Revoke", key=f"revoke_qr_{invite_id}", width="stretch"):
+                    auth_qr_collection().update_one(
+                        {"_id": invite_id},
+                        {"$set": {
+                            "active": False,
+                            "revoked_at": datetime.now(),
+                            "revoked_by": st.session_state.get("username", "Admin"),
+                        }},
+                    )
+                    st.success("QR invite revoked.")
+                    st.rerun()
+
+    with device_tab:
+        devices = list(auth_devices_collection().find({}).sort("last_login_at", -1).limit(100))
+        if not devices:
+            st.info("No login devices recorded yet.")
+        for device in devices:
+            device_id = device["_id"]
+            current = device_id == st.session_state.get("auth_device_id")
+            active = bool(device.get("active", True))
+            with st.container(border=True):
+                c1, c2, c3, c4 = st.columns([2.2, 1.1, 1.6, 0.9])
+                label = device.get("label") or "Browser session"
+                c1.markdown(f"**{html_escape(str(label))}**")
+                c1.caption("This session" if current else str(device.get("signature", "")))
+                c2.write(str(device.get("role", "member")).title())
+                c2.caption(str(device.get("method", "login")).replace("_", " ").title())
+                c3.write(str(device.get("user_name", "Member")))
+                c3.caption(f"Last login {_format_auth_dt(device.get('last_login_at'))}")
+                if active:
+                    if c4.button("Revoke", key=f"revoke_device_{device_id}", width="stretch"):
+                        auth_devices_collection().update_one(
+                            {"_id": device_id},
+                            {"$set": {
+                                "active": False,
+                                "revoked_at": datetime.now(),
+                                "revoked_by": st.session_state.get("username", "Admin"),
+                            }},
+                        )
+                        if current:
+                            _clear_auth_state()
+                        st.success("Login device revoked.")
+                        st.rerun()
+                else:
+                    if c4.button("Delete", key=f"delete_device_{device_id}", width="stretch"):
+                        auth_devices_collection().delete_one({"_id": device_id})
+                        st.success("Login device deleted.")
+                        st.rerun()
 
 def page_dashboard():
     page_header("Dashboard", "Business Overview")
@@ -4557,14 +5214,22 @@ def main():
         st.session_state.logged_in = False
     if "theme" not in st.session_state:
         st.session_state.theme = "light"
+    if st.session_state.logged_in and "user_role" not in st.session_state:
+        st.session_state.user_role = "admin"
 
     # Apply light mode CSS overrides if needed
     inject_theme()
+    ensure_auth_indexes()
 
     if not st.session_state.logged_in:
         page_add_sale(public=True)
         render_admin_login_strip()
         return
+
+    if _current_auth_device_revoked():
+        st.warning("This login device has been revoked.")
+        _clear_auth_state()
+        st.rerun()
 
     page = sidebar()
 
@@ -4579,10 +5244,16 @@ def main():
     elif "Passbook Reader" in page: page_passbook_reader()
     elif "Work Notes"  in page: page_work_notes()
     elif "AI Assistant" in page: page_ai_assistant()
+    elif "Security"    in page: page_security_devices()
     elif "Backup"      in page: page_backup_restore()
     elif "Logout"      in page:
-        st.session_state.logged_in = False
-        st.session_state.username  = None
+        device_id = st.session_state.get("auth_device_id")
+        if device_id:
+            auth_devices_collection().update_one(
+                {"_id": device_id},
+                {"$set": {"active": False, "logged_out_at": datetime.now()}},
+            )
+        _clear_auth_state()
         st.rerun()
 
 if __name__ == "__main__":
