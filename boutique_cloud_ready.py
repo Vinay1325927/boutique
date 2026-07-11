@@ -2426,17 +2426,17 @@ def page_passbook_reader():
     with a1:
         if selected_name not in ["All Names", "Saved Vendors"]:
             if selected_is_vendor:
-                if st.button("Remove Vendor", key="passbook_remove_vendor", use_container_width=True):
+                if st.button("Remove Vendor", key="passbook_remove_vendor", width="stretch"):
                     remove_passbook_vendor(selected_name)
                     st.success(f"{selected_name} removed from saved vendors.")
                     st.rerun()
             else:
-                if st.button("Mark as Vendor", key="passbook_mark_vendor", use_container_width=True):
+                if st.button("Mark as Vendor", key="passbook_mark_vendor", width="stretch"):
                     if save_passbook_vendor(selected_name):
                         st.success(f"{selected_name} saved as vendor.")
                         st.rerun()
         else:
-            st.button("Mark as Vendor", key="passbook_mark_vendor_disabled", disabled=True, use_container_width=True)
+            st.button("Mark as Vendor", key="passbook_mark_vendor_disabled", disabled=True, width="stretch")
     with a2:
         if saved_vendors:
             st.metric("Saved Vendors", len(saved_vendors))
@@ -2455,14 +2455,14 @@ def page_passbook_reader():
     else:
         show_cols = ["Date", "Name", "Description", "Debit", "Credit", "Balance", "Passbook", "Statement Date", "Account"]
         show = filtered[[c for c in show_cols if c in filtered.columns]].copy()
-        st.dataframe(show, use_container_width=True, hide_index=True, height=460)
+        st.dataframe(show, width="stretch", hide_index=True, height=460)
         safe_name = re.sub(r"[^0-9A-Za-z]+", "_", selected_name if selected_name != "All Names" else pb.get("customer_name", "passbook")).strip("_").lower()
         st.download_button(
             "Download Filtered CSV",
             data=show.to_csv(index=False),
             file_name=f"passbook_{safe_name or 'transactions'}_{date.today()}.csv",
             mime="text/csv",
-            use_container_width=True,
+            width="stretch",
             key="passbook_filtered_csv",
         )
         passbook_context = "\n\n".join([
@@ -2571,7 +2571,7 @@ def page_passbook_reader():
             sm3.metric("Total Value", f"₹{sale_sell * sale_qty:,.2f}")
 
             sale_notes = st.text_area("Notes", value=f"From passbook transaction: {txn.get('Description', '')}", height=60, key="passbook_sale_notes")
-            save_sale = st.form_submit_button("Save Sale", use_container_width=True)
+            save_sale = st.form_submit_button("Save Sale", width="stretch")
 
         if sale_customer_type == "Existing Customer":
             sale_customer = selected_existing_customer
@@ -2633,9 +2633,9 @@ def page_passbook_reader():
     with st.expander("Saved Vendors", expanded=False):
         if saved_vendors:
             vendor_df = pd.DataFrame({"Vendor Name": saved_vendors})
-            st.dataframe(vendor_df, use_container_width=True, hide_index=True, height=220)
+            st.dataframe(vendor_df, width="stretch", hide_index=True, height=220)
             remove_name = st.selectbox("Remove Saved Vendor", saved_vendors, key="passbook_saved_vendor_remove_select")
-            if st.button("Remove Selected Vendor", key="passbook_saved_vendor_remove", use_container_width=True):
+            if st.button("Remove Selected Vendor", key="passbook_saved_vendor_remove", width="stretch"):
                 remove_passbook_vendor(remove_name)
                 st.success(f"{remove_name} removed from saved vendors.")
                 st.rerun()
@@ -2646,7 +2646,7 @@ def page_passbook_reader():
         if names:
             name_counts = txn_df[txn_df["_passbook_idx"] == selected_idx]["Name"].value_counts().reset_index()
             name_counts.columns = ["Name", "Transactions"]
-            st.dataframe(name_counts, use_container_width=True, hide_index=True, height=320)
+            st.dataframe(name_counts, width="stretch", hide_index=True, height=320)
         else:
             st.info("No names found in the uploaded passbook transactions.")
 
@@ -2845,7 +2845,7 @@ def render_customer_bill_download(df: pd.DataFrame, customer_name: str, key: str
         chosen_limit = normalize_bill_limit(bill_limit)
     scope_key = re.sub(r"[^0-9A-Za-z]+", "_", bill_scope_label(chosen_scope, chosen_limit)).strip("_").lower()
     state_key = f"{key}_{scope_key}_bill_download"
-    if st.button(label, key=f"{key}_create", use_container_width=True):
+    if st.button(label, key=f"{key}_create", width="stretch"):
         try:
             bill_doc = create_bill_history_record(df, customer_name, bill_date=bill_date or date.today(), bill_scope=chosen_scope, bill_limit=chosen_limit)
             bill_pdf = generate_customer_bill_pdf(df, customer_name, bill_date=bill_date or date.today(), bill_id=bill_doc["bill_id"], bill_scope=chosen_scope, bill_limit=chosen_limit)
@@ -2872,7 +2872,7 @@ def render_customer_bill_download(df: pd.DataFrame, customer_name: str, key: str
             file_name=bill_file_name(payload["customer_name"], payload["bill_id"]),
             mime="application/pdf",
             key=f"{key}_download",
-            use_container_width=True,
+            width="stretch",
         )
 
 def vendor_picker(label: str, key_prefix: str, current: str = "") -> str:
@@ -2912,7 +2912,7 @@ def page_add_sale(public=False):
         render_ai_sale_entry_assistant()
         rule()
 
-    ctype = st.radio("", ["New Customer", "Existing Customer"], horizontal=True)
+    ctype = st.radio("Customer type", ["New Customer", "Existing Customer"], horizontal=True, label_visibility="collapsed")
     rule_sm()
 
     cname, cphone = "", ""
@@ -2996,7 +2996,7 @@ def page_add_sale(public=False):
 
         notes = st.text_area("Notes", placeholder="Special instructions…", height=60)
 
-        submitted = st.form_submit_button("Save Sale", use_container_width=True)
+        submitted = st.form_submit_button("Save Sale", width="stretch")
 
         if submitted:
             # ── Public form rate limiting ────────────────────────────────
@@ -3071,7 +3071,7 @@ _LOCKOUT_SECS   = 300   # 5-minute lockout after max attempts
 _BACKOFF_BASE   = 1.5   # seconds — doubles each attempt after 1st failure
 _FACE_MATCH_TOLERANCE = 0.46
 _TEMP_QR_TYPE = "boutique_temp_login"
-_FACE_VECTOR_VERSION = "face_recognition_128d_v1"
+_FACE_VECTOR_VERSION = "dlib_128d_v1"
 
 def auth_faces_collection():
     return get_db()["auth_faces"]
@@ -3113,15 +3113,29 @@ def _load_cv_libs():
         return None, None, str(exc)
 
 @st.cache_resource
-def _load_vision_libs():
+def _load_face_tools():
     try:
         cv2, np, error = _load_cv_libs()
         if error:
-            return None, None, None, error
-        import face_recognition
-        return cv2, np, face_recognition, ""
+            return None, None, None, None, error
+        try:
+            import face_recognition
+            return cv2, np, face_recognition, "face_recognition", ""
+        except Exception:
+            import dlib
+            import face_recognition_models
+            detector = dlib.get_frontal_face_detector()
+            pose_predictor = dlib.shape_predictor(face_recognition_models.pose_predictor_model_location())
+            face_encoder = dlib.face_recognition_model_v1(face_recognition_models.face_recognition_model_location())
+            tools = {
+                "detector": detector,
+                "pose_predictor": pose_predictor,
+                "face_encoder": face_encoder,
+                "dlib": dlib,
+            }
+            return cv2, np, tools, "dlib", ""
     except Exception as exc:
-        return None, None, None, str(exc)
+        return None, None, None, None, str(exc)
 
 def _cv_dependency_message(error: str) -> str:
     return (
@@ -3131,7 +3145,7 @@ def _cv_dependency_message(error: str) -> str:
 
 def _vision_dependency_message(error: str) -> str:
     return (
-        "Camera login needs OpenCV, numpy, and face_recognition installed. "
+        "Camera login needs OpenCV, numpy, dlib-bin, and face-recognition-models installed. "
         f"Dependency error: {error}"
     )
 
@@ -3151,22 +3165,33 @@ def _uploaded_file_to_bgr(uploaded_file):
     return image_bgr, ""
 
 def extract_face_encoding(uploaded_file):
-    cv2, _, face_recognition, error = _load_vision_libs()
+    cv2, np, face_tools, backend, error = _load_face_tools()
     if error:
         return None, _vision_dependency_message(error)
     image_bgr, error = _uploaded_file_to_bgr(uploaded_file)
     if error:
         return None, error
     image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
-    locations = face_recognition.face_locations(image_rgb, model="hog")
-    if not locations:
+    if backend == "face_recognition":
+        locations = face_tools.face_locations(image_rgb, model="hog")
+        if not locations:
+            return None, "No face was found. Try brighter light and keep your face centered."
+        if len(locations) > 1:
+            return None, "Multiple faces were found. Capture only one person."
+        encodings = face_tools.face_encodings(image_rgb, known_face_locations=locations)
+        if not encodings:
+            return None, "Could not convert this face into a Face ID vector."
+        return [float(v) for v in encodings[0]], ""
+
+    dlib = face_tools["dlib"]
+    rectangles = list(face_tools["detector"](image_rgb, 1))
+    if not rectangles:
         return None, "No face was found. Try brighter light and keep your face centered."
-    if len(locations) > 1:
+    if len(rectangles) > 1:
         return None, "Multiple faces were found. Capture only one person."
-    encodings = face_recognition.face_encodings(image_rgb, known_face_locations=locations)
-    if not encodings:
-        return None, "Could not convert this face into a Face ID vector."
-    return [float(v) for v in encodings[0]], ""
+    shape = face_tools["pose_predictor"](image_rgb, rectangles[0])
+    encoding = face_tools["face_encoder"].compute_face_descriptor(image_rgb, shape)
+    return [float(v) for v in np.array(encoding, dtype="float64")], ""
 
 def _find_matching_face(encoding: list[float]):
     _, np, error = _load_cv_libs()
@@ -3938,7 +3963,7 @@ def page_dashboard():
         fig.add_trace(go.Bar(x=monthly["month"], y=monthly["revenue"], name="Revenue", marker_color="rgba(46,111,216,0.4)", marker_line_color="#2E6FD8", marker_line_width=1))
         fig.add_trace(go.Scatter(x=monthly["month"], y=monthly["profit"], name="Profit", mode="lines+markers", line=dict(color="#7ADFA0", width=2), marker=dict(size=5, color="#7ADFA0")))
         styled_fig(fig, 300).update_layout(title="Monthly Revenue & Profit", barmode="overlay", legend=dict(orientation="h", y=1.18, x=0))
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
     with cr:
         paid    = (df["payment_received"] == 1).sum()
@@ -3947,13 +3972,13 @@ def page_dashboard():
         fig2.add_annotation(text=f"<b>{paid+pending}</b>", x=0.5, y=0.52, showarrow=False, font=dict(color="#E8EEF8", family="Playfair Display", size=28))
         fig2.add_annotation(text="sales", x=0.5, y=0.38, showarrow=False, font=dict(color="#3D5478", family="Jost", size=11))
         styled_fig(fig2, 300).update_layout(title="Payment Status", showlegend=True, legend=dict(orientation="h", y=-0.05, x=0.25))
-        st.plotly_chart(fig2, use_container_width=True)
+        st.plotly_chart(fig2, width="stretch")
 
     cl2, cr2 = st.columns(2)
     with cl2:
         cat_rev = df.groupby("product_category")["selling_price"].sum().reset_index()
         fig3 = px.pie(cat_rev, values="selling_price", names="product_category", title="Revenue by Category", hole=0.55, color_discrete_sequence=["#2E6FD8","#4D8AE8","#7ADFA0","#8BACD8","#E08090","#1A3D80","#3D9A6C","#4A9AC8","#9B9070","#A8C4F0"])
-        styled_fig(fig3, 270); st.plotly_chart(fig3, use_container_width=True)
+        styled_fig(fig3, 270); st.plotly_chart(fig3, width="stretch")
 
     with cr2:
         daily = df.set_index("sale_date")["selling_price"].resample("D").sum().reset_index()
@@ -3963,7 +3988,7 @@ def page_dashboard():
         fig4.add_trace(go.Bar(x=daily["date"], y=daily["revenue"], name="Daily", marker_color="rgba(46,111,216,0.25)", marker_line_width=0))
         fig4.add_trace(go.Scatter(x=daily["date"], y=daily["rolling"], name="7-day avg", line=dict(color="#2E6FD8", width=1.8)))
         styled_fig(fig4, 270).update_layout(title="Daily Revenue", legend=dict(orientation="h", y=1.18, x=0))
-        st.plotly_chart(fig4, use_container_width=True)
+        st.plotly_chart(fig4, width="stretch")
 
     sec("Recent Transactions")
     recent = df.sort_values("sale_date", ascending=False).head(10).copy()
@@ -3972,14 +3997,14 @@ def page_dashboard():
     recent["Delayed"]   = recent["delay_status"].map({0:"—", 1:"Yes"})
     show = recent[["id","customer_name","sale_date","product_category","selling_price","profit","pending_amount","Status","Delayed"]].copy()
     show.columns = ["ID","Customer","Date","Category","Amount ₹","Profit ₹","Pending ₹","Status","Delayed"]
-    st.dataframe(show, use_container_width=True, hide_index=True)
+    st.dataframe(show, width="stretch", hide_index=True)
 
     rule()
     da, db, _ = st.columns([1, 1, 2])
     with da:
-        st.download_button("Export CSV", data=df.assign(sale_date=df["sale_date"].astype(str)).to_csv(index=False), file_name=f"boutique_{date.today()}.csv", mime="text/csv", use_container_width=True)
+        st.download_button("Export CSV", data=df.assign(sale_date=df["sale_date"].astype(str)).to_csv(index=False), file_name=f"boutique_{date.today()}.csv", mime="text/csv", width="stretch")
     with db:
-        st.download_button("Export Excel", data=to_excel(df), file_name=f"boutique_{date.today()}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+        st.download_button("Export Excel", data=to_excel(df), file_name=f"boutique_{date.today()}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", width="stretch")
 
     render_ai_panel(
         "AI Dashboard Summary",
@@ -4062,7 +4087,7 @@ def page_review():
 
     edited_accounts = st.data_editor(
         editor,
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
         num_rows="fixed",
         disabled=["ID", "Profit ₹", "Pending ₹", "Status"],
@@ -4084,7 +4109,7 @@ def page_review():
     )
     save_edit_col, _ = st.columns([1, 3])
     with save_edit_col:
-        if st.button("Save Edited Rows", use_container_width=True):
+        if st.button("Save Edited Rows", width="stretch"):
             changed, errors = save_account_editor_changes(fdf, edited_accounts)
             for err in errors:
                 st.error(err)
@@ -4096,9 +4121,9 @@ def page_review():
 
     dc, de, _ = st.columns([1,1,2])
     with dc:
-        st.download_button("Export CSV", data=fdf.assign(sale_date=fdf["sale_date"].astype(str)).to_csv(index=False), file_name=f"accounts_{date.today()}.csv", mime="text/csv", use_container_width=True)
+        st.download_button("Export CSV", data=fdf.assign(sale_date=fdf["sale_date"].astype(str)).to_csv(index=False), file_name=f"accounts_{date.today()}.csv", mime="text/csv", width="stretch")
     with de:
-        st.download_button("Export Excel", data=to_excel(fdf), file_name=f"accounts_{date.today()}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+        st.download_button("Export Excel", data=to_excel(fdf), file_name=f"accounts_{date.today()}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", width="stretch")
 
     render_ai_panel(
         "AI Review Current Filter",
@@ -4146,7 +4171,7 @@ def page_review():
             )
             action_cols = st.columns([4, 1])
             with action_cols[1]:
-                if st.button("Mark Paid", key=f"pay_open_{row_id}", use_container_width=True):
+                if st.button("Mark Paid", key=f"pay_open_{row_id}", width="stretch"):
                     st.session_state.payment_editor_id = row_id
                     st.rerun()
 
@@ -4164,9 +4189,9 @@ def page_review():
                         received_by = st.text_input("Received By", value=default_receiver_name(), key=f"payment_received_by_{row_id}")
                     save_col, cancel_col = st.columns(2)
                     with save_col:
-                        save_payment = st.form_submit_button("Save Payment", use_container_width=True)
+                        save_payment = st.form_submit_button("Save Payment", width="stretch")
                     with cancel_col:
-                        cancel_payment = st.form_submit_button("Cancel", use_container_width=True)
+                        cancel_payment = st.form_submit_button("Cancel", width="stretch")
 
                     if save_payment:
                         if not payment_ok:
@@ -4220,7 +4245,7 @@ def page_update():
     preview = df[preview_cols].copy()
     if "payment_received" in preview.columns:
         preview["payment_received"] = preview["payment_received"].map({0:"Pending",1:"Paid"})
-    st.dataframe(preview, use_container_width=True, hide_index=True)
+    st.dataframe(preview, width="stretch", hide_index=True)
 
     sel = st.selectbox("Select ID to Edit", df["id"].tolist(), format_func=lambda x: f"#{x} — {df[df['id']==x]['customer_name'].values[0]}")
     row = df[df["id"] == sel].iloc[0]
@@ -4265,8 +4290,8 @@ def page_update():
         m3.metric("Updated Margin",  f"{(nprofit/ns*100 if ns>0 else 0):.1f}%")
 
         bu, bd = st.columns(2)
-        with bu: upd = st.form_submit_button("Save Changes",       use_container_width=True)
-        with bd: dlt = st.form_submit_button("Delete Transaction",  use_container_width=True)
+        with bu: upd = st.form_submit_button("Save Changes",       width="stretch")
+        with bd: dlt = st.form_submit_button("Delete Transaction",  width="stretch")
 
         if upd:
             errs = []
@@ -4339,16 +4364,16 @@ def page_customers():
     if tier_f != "All": view = view[view["tier"] == tier_f]
 
     disp = view.rename(columns={"customer_name":"Customer","phone":"Phone","transactions":"Visits","spent":"Total Spent ₹","pending":"Pending ₹","last_visit":"Last Visit","profit":"Profit ₹","tier":"Tier"})
-    st.dataframe(disp.style.format({"Total Spent ₹":"₹{:,.0f}","Pending ₹":"₹{:,.0f}","Profit ₹":"₹{:,.0f}"}), use_container_width=True, hide_index=True)
+    st.dataframe(disp.style.format({"Total Spent ₹":"₹{:,.0f}","Pending ₹":"₹{:,.0f}","Profit ₹":"₹{:,.0f}"}), width="stretch", hide_index=True)
 
     dc, de = st.columns(2)
     with dc:
-        st.download_button("Export CSV", data=disp.to_csv(index=False), file_name=f"customers_{date.today()}.csv", mime="text/csv", use_container_width=True)
+        st.download_button("Export CSV", data=disp.to_csv(index=False), file_name=f"customers_{date.today()}.csv", mime="text/csv", width="stretch")
     with de:
         out = BytesIO()
         with pd.ExcelWriter(out, engine="openpyxl") as w: disp.to_excel(w, index=False)
         out.seek(0)
-        st.download_button("Export Excel", data=out, file_name=f"customers_{date.today()}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+        st.download_button("Export Excel", data=out, file_name=f"customers_{date.today()}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", width="stretch")
 
     sec("Purchase History")
     chosen = st.selectbox("Select Customer", summ["customer_name"].tolist())
@@ -4364,13 +4389,13 @@ def page_customers():
         cols = [c for c in ["sale_date","product_category","product_description","selling_price","amount_paid","pending_amount","payment_method","status"] if c in hist.columns]
         show = hist[cols].copy()
         show.columns = ["Date","Category","Description","Price ₹","Paid ₹","Pending ₹","Method","Status"][:len(cols)]
-        st.dataframe(show, use_container_width=True, hide_index=True)
+        st.dataframe(show, width="stretch", hide_index=True)
         if len(hist) > 1:
             hs = df[df["customer_name"]==chosen].sort_values("sale_date").copy()
             hs["cumulative"] = hs["selling_price"].cumsum()
             fig = px.line(hs, x="sale_date", y="cumulative", title=f"Cumulative Spend — {chosen}", markers=True)
             fig.update_traces(line_color="#2E6FD8", marker_color="#4D8AE8", marker_size=5)
-            styled_fig(fig, 230); st.plotly_chart(fig, use_container_width=True)
+            styled_fig(fig, 230); st.plotly_chart(fig, width="stretch")
         render_ai_panel(
             "AI Customer Summary",
             f"Customer: {chosen}\nPurchase history:\n{df_for_ai(hist, limit=60)}",
@@ -4428,7 +4453,7 @@ def page_generate_bill():
         preview["status"] = hist.apply(bill_status, axis=1)
         preview["last_payment_date"] = hist.apply(bill_paid_date, axis=1)
         preview.columns = ["Date","Category","Description","Bill ₹","Paid ₹","Pending ₹","Paid Date","Status"]
-        st.dataframe(preview, use_container_width=True, hide_index=True)
+        st.dataframe(preview, width="stretch", hide_index=True)
 
     dc, _ = st.columns([1, 3])
     with dc:
@@ -4457,7 +4482,7 @@ def page_generate_bill():
     history_show = history_df[["bill_id","customer_name","customer_phone","bill_scope_label","bill_date","generated_at","purchase_count","total_bill","total_paid","total_pending","generated_by"]].copy()
     history_show["generated_at"] = pd.to_datetime(history_show["generated_at"], errors="coerce").dt.strftime("%d %b %Y, %I:%M %p").fillna(history_show["generated_at"])
     history_show.columns = ["Bill ID","Customer","Phone","Type","Bill Date","Generated On","Purchases","Total Bill ₹","Paid ₹","Pending ₹","Generated By"]
-    st.dataframe(history_show, use_container_width=True, hide_index=True)
+    st.dataframe(history_show, width="stretch", hide_index=True)
 
     selected_bill_id = st.selectbox("View Bill Details", history_show["Bill ID"].tolist(), key="bill_history_detail")
     selected_doc = next((doc for doc in history if doc.get("bill_id") == selected_bill_id), None)
@@ -4474,7 +4499,7 @@ def page_generate_bill():
             item_cols = ["sale_id","sale_date","category","description","bill_amount","paid_amount","pending_amount","paid_date","status"]
             items_df = items_df[[c for c in item_cols if c in items_df.columns]].copy()
             items_df.columns = ["Sale ID","Sale Date","Category","Description","Bill ₹","Paid ₹","Pending ₹","Paid Date","Status"][:len(items_df.columns)]
-            st.dataframe(items_df, use_container_width=True, hide_index=True)
+            st.dataframe(items_df, width="stretch", hide_index=True)
             render_ai_panel(
                 "AI Bill Message",
                 f"Bill document:\n{pd.DataFrame([selected_doc]).drop(columns=['items'], errors='ignore').to_csv(index=False)}\nItems:\n{items_df.to_csv(index=False)}",
@@ -4511,13 +4536,13 @@ def page_analytics():
             fig.add_trace(go.Bar(x=monthly["month"], y=monthly["revenue"], name="Revenue", marker_color="rgba(46,111,216,0.4)", marker_line_color="#2E6FD8", marker_line_width=1))
             fig.add_trace(go.Scatter(x=monthly["month"], y=monthly["profit"], name="Profit", mode="lines+markers", line=dict(color="#7ADFA0", width=2), marker=dict(size=5)))
             styled_fig(fig).update_layout(title="Revenue & Profit by Month", barmode="overlay", legend=dict(orientation="h", y=1.18, x=0))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
         with c2:
             daily = df.set_index("sale_date")["selling_price"].resample("D").sum().reset_index()
             daily.columns = ["date","revenue"]
             fig2 = px.area(daily, x="date", y="revenue", title="Daily Revenue")
             fig2.update_traces(fillcolor="rgba(46,111,216,0.12)", line_color="#2E6FD8", line_width=1.5)
-            styled_fig(fig2); st.plotly_chart(fig2, use_container_width=True)
+            styled_fig(fig2); st.plotly_chart(fig2, width="stretch")
         c3, c4 = st.columns(2)
         with c3:
             dow_order = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]
@@ -4525,63 +4550,63 @@ def page_analytics():
             dow["dow"] = pd.Categorical(dow["dow"], categories=dow_order, ordered=True)
             dow = dow.sort_values("dow")
             fig3 = px.bar(dow, x="dow", y="sales", title="Sales by Day of Week", color="revenue", color_continuous_scale=[[0,"#070C18"],[1,"#2E6FD8"]])
-            styled_fig(fig3); st.plotly_chart(fig3, use_container_width=True)
+            styled_fig(fig3); st.plotly_chart(fig3, width="stretch")
         with c4:
             monthly["MoM Growth %"] = monthly["revenue"].pct_change()*100
             fig4 = px.bar(monthly.dropna(), x="month", y="MoM Growth %", title="Month-over-Month Growth", color="MoM Growth %", color_continuous_scale=[[0,"#C05060"],[0.5,"#0F1A2E"],[1,"#7ADFA0"]])
-            styled_fig(fig4); st.plotly_chart(fig4, use_container_width=True)
+            styled_fig(fig4); st.plotly_chart(fig4, width="stretch")
 
     with t2:
         c1, c2 = st.columns(2)
         with c1:
             top_c = df.groupby("customer_name")["selling_price"].sum().nlargest(10).reset_index()
             fig5 = px.bar(top_c, x="selling_price", y="customer_name", orientation="h", title="Top 10 Customers by Revenue", color="selling_price", color_continuous_scale=[[0,"#070C18"],[1,"#2E6FD8"]])
-            styled_fig(fig5); fig5.update_layout(yaxis=dict(autorange="reversed")); st.plotly_chart(fig5, use_container_width=True)
+            styled_fig(fig5); fig5.update_layout(yaxis=dict(autorange="reversed")); st.plotly_chart(fig5, width="stretch")
         with c2:
             cp = df.groupby("customer_name")["pending_amount"].sum()
             cp = cp[cp > 0].nlargest(10).reset_index()
             if not cp.empty:
                 fig6 = px.bar(cp, x="pending_amount", y="customer_name", orientation="h", title="Top Customers by Pending", color="pending_amount", color_continuous_scale=[[0,"#070C18"],[1,"#C05060"]])
-                styled_fig(fig6); fig6.update_layout(yaxis=dict(autorange="reversed")); st.plotly_chart(fig6, use_container_width=True)
+                styled_fig(fig6); fig6.update_layout(yaxis=dict(autorange="reversed")); st.plotly_chart(fig6, width="stretch")
             else:
                 st.success("No pending amounts.")
         cust_stats = df.groupby("customer_name").agg(visits=("id","count"), revenue=("selling_price","sum"), avg_order=("selling_price","mean")).reset_index()
         fig_scatter = px.scatter(cust_stats, x="visits", y="revenue", size="avg_order", hover_name="customer_name", title="Customer Value Matrix", color="revenue", color_continuous_scale=[[0,"#070C18"],[1,"#2E6FD8"]])
-        styled_fig(fig_scatter, 330); st.plotly_chart(fig_scatter, use_container_width=True)
+        styled_fig(fig_scatter, 330); st.plotly_chart(fig_scatter, width="stretch")
         seg = df.groupby("customer_name").agg(spend=("selling_price","sum")).reset_index()
         seg["tier"] = pd.cut(seg["spend"], bins=[0,5000,20000,50000,float("inf")], labels=["Bronze","Silver","Gold","Platinum"])
         sec("Customer Tier Distribution")
         sg = seg.groupby("tier", observed=True).agg(customers=("customer_name","count"), total=("spend","sum")).reset_index()
         sg.columns = ["Tier","Customers","Total Spend ₹"]
-        st.dataframe(sg, use_container_width=True, hide_index=True)
+        st.dataframe(sg, width="stretch", hide_index=True)
 
     with t3:
         c1, c2 = st.columns(2)
         with c1:
             cd = df.groupby("product_category").size().reset_index(name="count")
             fig7 = px.pie(cd, values="count", names="product_category", title="Sales Volume by Category", hole=0.55, color_discrete_sequence=["#2E6FD8","#4D8AE8","#7ADFA0","#8BACD8","#E08090","#1A3D80","#3D9A6C","#4A9AC8","#9B9070","#A8C4F0"])
-            styled_fig(fig7); st.plotly_chart(fig7, use_container_width=True)
+            styled_fig(fig7); st.plotly_chart(fig7, width="stretch")
         with c2:
             cp2 = df.groupby("product_category").agg(profit=("profit","sum"), revenue=("selling_price","sum")).reset_index()
             cp2["margin"] = (cp2["profit"]/cp2["revenue"]*100).round(1)
             fig8 = px.bar(cp2, x="product_category", y="profit", title="Profit by Category", color="margin", color_continuous_scale=[[0,"#070C18"],[1,"#7ADFA0"]])
-            styled_fig(fig8); st.plotly_chart(fig8, use_container_width=True)
+            styled_fig(fig8); st.plotly_chart(fig8, width="stretch")
         cm = df.groupby(["month","product_category"])["selling_price"].sum().unstack(fill_value=0)
         if not cm.empty:
             fig9 = px.imshow(cm.T, title="Category × Month Heatmap", color_continuous_scale=[[0,"#070C18"],[0.4,"#1A3D80"],[1,"#2E6FD8"]], aspect="auto")
-            styled_fig(fig9, 300); st.plotly_chart(fig9, use_container_width=True)
+            styled_fig(fig9, 300); st.plotly_chart(fig9, width="stretch")
 
     with t4:
         c1, c2 = st.columns(2)
         with c1:
             pm = df.groupby("payment_method").size().reset_index(name="count")
             fig10 = px.pie(pm, values="count", names="payment_method", title="Payment Method Distribution", hole=0.58, color_discrete_sequence=["#2E6FD8","#4D8AE8","#7ADFA0","#8BACD8","#1A3D80","#E08090"])
-            styled_fig(fig10); st.plotly_chart(fig10, use_container_width=True)
+            styled_fig(fig10); st.plotly_chart(fig10, width="stretch")
         with c2:
             ps = df.groupby("payment_received").agg(count=("id","count"), total=("pending_amount","sum")).reset_index()
             ps["label"] = ps["payment_received"].map({0:"Pending",1:"Received"})
             fig11 = px.bar(ps, x="label", y="count", title="Payment Status", color="label", color_discrete_map={"Pending":"#2E6FD8","Received":"#7ADFA0"})
-            styled_fig(fig11); st.plotly_chart(fig11, use_container_width=True)
+            styled_fig(fig11); st.plotly_chart(fig11, width="stretch")
         aged = df[df["pending_amount"] > 0].copy()
         if not aged.empty:
             today_ts = pd.Timestamp(date.today())
@@ -4589,7 +4614,7 @@ def page_analytics():
             aged["bucket"] = pd.cut(aged["days"], bins=[0,7,15,30,60,9999], labels=["0–7d","8–15d","16–30d","31–60d","60d+"])
             ag = aged.groupby("bucket", observed=True)["pending_amount"].sum().reset_index()
             fig12 = px.bar(ag, x="bucket", y="pending_amount", title="Pending — Aging Buckets", color="pending_amount", color_continuous_scale=[[0,"#2E6FD8"],[1,"#C05060"]])
-            styled_fig(fig12); st.plotly_chart(fig12, use_container_width=True)
+            styled_fig(fig12); st.plotly_chart(fig12, width="stretch")
         else:
             st.success("No pending payments.")
 
@@ -4600,7 +4625,7 @@ def page_analytics():
                 vd = (df[df["vendor"].astype(str).str.strip() != ""].groupby("vendor").agg(revenue=("selling_price","sum"), items=("id","count")).nlargest(10,"revenue").reset_index())
                 if not vd.empty:
                     fig13 = px.bar(vd, x="revenue", y="vendor", orientation="h", title="Top Vendors by Revenue", color="revenue", color_continuous_scale=[[0,"#070C18"],[1,"#2E6FD8"]])
-                    styled_fig(fig13); fig13.update_layout(yaxis=dict(autorange="reversed")); st.plotly_chart(fig13, use_container_width=True)
+                    styled_fig(fig13); fig13.update_layout(yaxis=dict(autorange="reversed")); st.plotly_chart(fig13, width="stretch")
                 else:
                     st.info("Add vendor names to see this chart.")
         with c2:
@@ -4610,7 +4635,7 @@ def page_analytics():
                     tm = (pd2.groupby("product_description").agg(margin=("margin","mean"), revenue=("selling_price","sum")).nlargest(10,"margin").reset_index())
                     tm["product_description"] = tm["product_description"].str[:30]
                     fig14 = px.bar(tm, x="margin", y="product_description", orientation="h", title="Top Products by Margin %", color="margin", color_continuous_scale=[[0,"#070C18"],[1,"#7ADFA0"]])
-                    styled_fig(fig14); fig14.update_layout(yaxis=dict(autorange="reversed")); st.plotly_chart(fig14, use_container_width=True)
+                    styled_fig(fig14); fig14.update_layout(yaxis=dict(autorange="reversed")); st.plotly_chart(fig14, width="stretch")
                 else:
                     st.info("Add product descriptions to see this chart.")
 
@@ -4662,11 +4687,11 @@ def page_reminders():
                     ca.write(r["sale_date"].strftime("%d %b %Y"))
                     cb.write(r.get("product_category","—"))
                     with cc:
-                        if st.button("Mark Paid", key=f"op_{row_id}", use_container_width=True):
+                        if st.button("Mark Paid", key=f"op_{row_id}", width="stretch"):
                             st.session_state.overdue_payment_editor_id = row_id
                             st.rerun()
                     with cd:
-                        if st.button("Remind", key=f"or_{row_id}", use_container_width=True):
+                        if st.button("Remind", key=f"or_{row_id}", width="stretch"):
                             st.toast(f"Reminder noted for {r['customer_name']}.")
                     with ce:
                         render_customer_bill_download(df, r["customer_name"], key=f"overdue_bill_{row_id}", label="Bill PDF")
@@ -4684,9 +4709,9 @@ def page_reminders():
                                 received_by = st.text_input("Received By", value=default_receiver_name(), key=f"overdue_payment_received_by_{row_id}")
                             save_col, cancel_col = st.columns(2)
                             with save_col:
-                                save_payment = st.form_submit_button("Save Payment", use_container_width=True)
+                                save_payment = st.form_submit_button("Save Payment", width="stretch")
                             with cancel_col:
-                                cancel_payment = st.form_submit_button("Cancel", use_container_width=True)
+                                cancel_payment = st.form_submit_button("Cancel", width="stretch")
                             if save_payment:
                                 if not payment_ok:
                                     st.error("Payment amount must be a valid number.")
@@ -4711,7 +4736,7 @@ def page_reminders():
             show = dl[["customer_name","sale_date","product_category","selling_price","pending_amount","days_old"]].copy()
             show["sale_date"] = show["sale_date"].dt.strftime("%d %b %Y")
             show.columns = ["Customer","Date","Category","Amount ₹","Pending ₹","Days Old"]
-            st.dataframe(show, use_container_width=True, hide_index=True)
+            st.dataframe(show, width="stretch", hide_index=True)
             sc = st.selectbox("Clear flag for:", dl["id"].tolist(), format_func=lambda x: f"#{x} — {dl[dl['id']==x]['customer_name'].values[0]}")
             if st.button("Clear Flag"):
                 get_col().update_one({"id": sc}, {"$set": {"delay_status":0}})
@@ -4726,7 +4751,7 @@ def page_reminders():
             hv["payment_received"] = hv["payment_received"].map({0:"Pending",1:"Paid"})
             show = hv[["customer_name","sale_date","product_category","selling_price","profit","payment_received"]].copy()
             show.columns = ["Customer","Date","Category","Amount ₹","Profit ₹","Status"]
-            st.dataframe(show, use_container_width=True, hide_index=True)
+            st.dataframe(show, width="stretch", hide_index=True)
 
     with t4:
         soon = df[(df["pending_amount"] > 0) & (df["days_old"] >= 7) & (df["days_old"] <= 30) & (df["delay_status"] == 0)].sort_values("days_old", ascending=False)
@@ -4737,7 +4762,7 @@ def page_reminders():
             show = soon[["customer_name","customer_phone","sale_date","product_category","pending_amount","days_old"]].copy()
             show["sale_date"] = show["sale_date"].dt.strftime("%d %b %Y")
             show.columns = ["Customer","Phone","Date","Category","Pending ₹","Days Old"]
-            st.dataframe(show, use_container_width=True, hide_index=True)
+            st.dataframe(show, width="stretch", hide_index=True)
             sec("Bill PDFs")
             for customer in sorted(soon["customer_name"].dropna().astype(str).unique(), key=str.casefold):
                 c1, c2 = st.columns([3, 1])
@@ -4784,11 +4809,11 @@ def page_inventory():
             if cat_f != "All" and "category" in view.columns: view = view[view["category"] == cat_f]
             if "quantity" in view.columns and "min_stock" in view.columns:
                 view["Status"] = view.apply(lambda r: "Out of Stock" if r["quantity"]==0 else ("Low Stock" if r["quantity"]<=r["min_stock"] else "OK"), axis=1)
-            st.dataframe(view, use_container_width=True, hide_index=True)
+            st.dataframe(view, width="stretch", hide_index=True)
             if "category" in inv_df.columns and "quantity" in inv_df.columns:
                 cat_stock = inv_df.groupby("category")["quantity"].sum().reset_index()
                 fig = px.bar(cat_stock, x="category", y="quantity", title="Stock by Category", color="quantity", color_continuous_scale=[[0,"#C05060"],[0.4,"#2E6FD8"],[1,"#7ADFA0"]])
-                styled_fig(fig, 260); st.plotly_chart(fig, use_container_width=True)
+                styled_fig(fig, 260); st.plotly_chart(fig, width="stretch")
 
     with t2:
         sec("Add or Update Stock Item")
@@ -4805,7 +4830,7 @@ def page_inventory():
                 item_cost = st.number_input("Cost Price (₹) *", min_value=0.0, step=50.0, format="%.2f")
                 item_mrp  = st.number_input("Selling Price (₹)",min_value=0.0, step=50.0, format="%.2f")
             item_notes = st.text_area("Notes", height=55)
-            if st.form_submit_button("Save Item", use_container_width=True):
+            if st.form_submit_button("Save Item", width="stretch"):
                 if not item_name.strip():
                     st.error("Item name is required.")
                 else:
@@ -4863,7 +4888,7 @@ def page_backup_restore():
             data=csv_data,
             file_name=f"boutique_checkpoint_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
             mime="text/csv",
-            use_container_width=True,
+            width="stretch",
         )
         st.caption("Includes all sales, customer, and payment records")
 
@@ -4878,7 +4903,7 @@ def page_backup_restore():
                 data=excel_data,
                 file_name=f"boutique_checkpoint_{ts_str}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True,
+                width="stretch",
             )
             st.caption("Formatted spreadsheet with column headers and styling")
         else:
@@ -4887,7 +4912,7 @@ def page_backup_restore():
         if last_backup_ts:
             st.markdown(f"<div class='bk-ts'>Last export: {last_backup_ts}</div>", unsafe_allow_html=True)
 
-        if st.button("📋  Record Manual Backup Note", use_container_width=True):
+        if st.button("📋  Record Manual Backup Note", width="stretch"):
             ts = datetime.now().strftime("%d %b %Y, %I:%M %p")
             st.session_state.last_backup_ts = ts
             st.success(f"✓ Manual backup noted at {ts}")
@@ -4939,7 +4964,7 @@ def page_backup_restore():
                 </div>
                 """, unsafe_allow_html=True)
 
-                st.dataframe(restore_df.head(5), use_container_width=True, hide_index=True)
+                st.dataframe(restore_df.head(5), width="stretch", hide_index=True)
 
                 st.warning(
                     "⚠️  This will **insert** records from the checkpoint into the live database. "
@@ -4948,7 +4973,7 @@ def page_backup_restore():
 
                 confirm = st.checkbox("I understand — proceed with restore")
                 if confirm:
-                    if st.button("🔄  Restore Database from Checkpoint", use_container_width=True):
+                    if st.button("🔄  Restore Database from Checkpoint", width="stretch"):
                         progress_placeholder = st.empty()
                         progress_placeholder.markdown(
                             "<div style='background:var(--bg-2);border-radius:999px;overflow:hidden;height:6px;margin:0.5rem 0'>"
@@ -5113,7 +5138,7 @@ def page_work_notes():
             work_date = st.date_input("Date You Worked", value=date.today(), key="work_note_date")
         with d2:
             note = st.text_input("Note", placeholder="Example: Updated accounts / checked passbook / entered pending payments", key="work_note_text")
-        save_note = st.form_submit_button("Save Note", use_container_width=True)
+        save_note = st.form_submit_button("Save Note", width="stretch")
 
     if save_note:
         save_work_note(work_date, note)
@@ -5131,14 +5156,14 @@ def page_work_notes():
     show = note_df[["id", "work_date", "note", "created_at", "created_by"]].copy()
     show["created_at"] = pd.to_datetime(show["created_at"], errors="coerce").dt.strftime("%d %b %Y, %I:%M %p").fillna(show["created_at"])
     show.columns = ["ID", "Date", "Note", "Saved On", "Saved By"]
-    st.dataframe(show, use_container_width=True, hide_index=True, height=420)
+    st.dataframe(show, width="stretch", hide_index=True, height=420)
 
     d1, d2 = st.columns([1, 3])
     with d1:
         delete_id = st.selectbox("Delete Note ID", show["ID"].tolist(), key="work_note_delete_id")
     with d2:
         st.caption("Delete only removes this manual note. It does not affect sales, bills, vendors, or passbook data.")
-        if st.button("Delete Selected Note", key="work_note_delete", use_container_width=True):
+        if st.button("Delete Selected Note", key="work_note_delete", width="stretch"):
             delete_work_note(int(delete_id))
             st.success(f"Deleted note #{delete_id}.")
             st.rerun()
@@ -5194,7 +5219,7 @@ def page_ai_assistant():
     ])
     default_task = "" if quick == "Custom question" else quick
     question = st.text_area("Question", value=default_task, height=120, key="global_ai_question")
-    if st.button("Ask AI", key="global_ai_run", use_container_width=True):
+    if st.button("Ask AI", key="global_ai_run", width="stretch"):
         try:
             with st.spinner("Thinking..."):
                 st.session_state.global_ai_answer = ask_llm(question, context)
